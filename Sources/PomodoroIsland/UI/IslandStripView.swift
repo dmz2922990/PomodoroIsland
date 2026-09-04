@@ -58,7 +58,11 @@ struct IslandStripView: View {
             Group {
                 if let task = store.currentTask {
                     Text(task.title)
-                        .foregroundStyle(Color.white.opacity(0.92))
+                        .foregroundStyle(
+                            engine.phase == .idle && !engine.running
+                                ? Color.white.opacity(0.45)   // 待开始：灰色
+                                : Color.white.opacity(0.92)   // 计时中：亮白
+                        )
                 } else {
                     Text("未选择任务")
                         .foregroundStyle(Theme.textTertiary)
