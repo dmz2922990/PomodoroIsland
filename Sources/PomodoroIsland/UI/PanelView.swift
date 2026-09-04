@@ -202,7 +202,14 @@ struct PanelView: View {
                             }
                         },
                         onSelect: taskTab == .open ? { store.setCurrent(task.id) } : {},
-                        onToggle: { store.toggleDone(task.id) },
+                        onToggle: {
+                            let wasCurrent = task.id == store.currentTaskId
+                            store.toggleDone(task.id)
+                            // 完成当前任务 → 自动停止专注（该番茄未完成，不计入）
+                            if wasCurrent, engine.phase == .focus {
+                                engine.reset()
+                            }
+                        },
                         onDelete: { store.deleteTask(task.id) }
                     )
                     .opacity(draggingTaskId == task.id ? 0.45 : 1)
