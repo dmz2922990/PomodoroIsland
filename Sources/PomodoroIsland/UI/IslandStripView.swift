@@ -64,7 +64,7 @@ struct IslandStripView: View {
                         .foregroundStyle(Theme.textTertiary)
                 }
             }
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 13.5, weight: .semibold))
             .lineLimit(1)
             .truncationMode(.middle)
             .padding(.horizontal, 3)
