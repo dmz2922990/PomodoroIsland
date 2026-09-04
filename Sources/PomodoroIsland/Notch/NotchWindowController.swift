@@ -52,7 +52,10 @@ final class NotchWindowController: ObservableObject {
     }
 
     func start(rootView: some View) {
-        let panel = NotchPanel(contentRect: collapsedFrame())
+        // 窗口尺寸固定为展开大小，永不变更：展开/收起完全由 SwiftUI 在窗口内驱动。
+        // （无边框窗口的 setFrame 动画在收缩时不可靠，曾导致收起后岛屿高度错误）
+        // 收起时 ignoresMouseEvents = true， oversized 的窗口不影响点击穿透。
+        let panel = NotchPanel(contentRect: expandedFrame())
         // 根视图内已 .ignoresSafeArea()：窗口整体位于屏幕安全区（刘海）内，
         // 若不忽略安全区，SwiftUI 会把岛屿往下推出一个刘海的高度
         panel.contentView = NSHostingView(rootView: rootView)
@@ -60,9 +63,9 @@ final class NotchWindowController: ObservableObject {
         window = panel
 
         if #available(macOS 12.0, *) {
-            NSLog("PomodoroIsland geometry: screen=\(screen.frame) safeArea=\(screen.safeAreaInsets) strip=\(collapsedFrame()) panelFrame=\(panel.frame)")
+            NSLog("PomodoroIsland geometry: screen=\(screen.frame) safeArea=\(screen.safeAreaInsets) island=\(collapsedIslandRect()) panelFrame=\(panel.frame)")
         } else {
-            NSLog("PomodoroIsland geometry: screen=\(screen.frame) strip=\(collapsedFrame()) panelFrame=\(panel.frame)")
+            NSLog("PomodoroIsland geometry: screen=\(screen.frame) island=\(collapsedIslandRect()) panelFrame=\(panel.frame)")
         }
 
         mouseWatch.onMove = { [weak self] point in
@@ -98,7 +101,8 @@ final class NotchWindowController: ObservableObject {
 
     private var stripRect: NSRect { NotchScreenInfo.stripRect(on: screen) }
 
-    private func collapsedFrame() -> NSRect {
+    /// 收起状态岛屿的命中区域（仅用于悬停/点击判定，窗口本身尺寸固定）
+    private func collapsedIslandRect() -> NSRect {
         NotchScreenInfo.collapsedIslandRect(on: screen)
     }
 
@@ -117,7 +121,7 @@ final class NotchWindowController: ObservableObject {
     }
 
     private var interactiveFrame: NSRect {
-        (window?.frame ?? collapsedFrame())
+        (window?.frame ?? collapsedIslandRect())
             .insetBy(dx: -Self.leaveMargin, dy: -Self.leaveMargin)
     }
 
@@ -130,8 +134,8 @@ final class NotchWindowController: ObservableObject {
         isExpanded = true
         trace("expand")
         window.ignoresMouseEvents = false
+        window.isExpandedVisible = true
         mouseWatch.setClickTracking(false)
-        window.setFrameWithAnimation(expandedFrame())
     }
 
     func collapse() {
@@ -140,8 +144,8 @@ final class NotchWindowController: ObservableObject {
         isExpanded = false
         trace("collapse")
         window.ignoresMouseEvents = true
+        window.isExpandedVisible = false
         mouseWatch.setClickTracking(true)
-        window.setFrameWithAnimation(collapsedFrame())
     }
 
     func toggle() {
@@ -161,7 +165,7 @@ final class NotchWindowController: ObservableObject {
             }
         } else {
             // 悬停在岛屿（刘海+下巴）内稍作停留后展开
-            let hoverRect = collapsedFrame().insetBy(dx: -4, dy: -4)
+            let hoverRect = collapsedIslandRect().insetBy(dx: -4, dy: -4)
             if NSPointInRect(point, hoverRect) {
                 dwellWork?.cancel()
                 let work = DispatchWorkItem { [weak self] in
@@ -177,7 +181,7 @@ final class NotchWindowController: ObservableObject {
     }
 
     private func handleGlobalClick(_ point: NSPoint) {
-        if !isExpanded, NSPointInRect(point, collapsedFrame().insetBy(dx: -4, dy: -4)) {
+        if !isExpanded, NSPointInRect(point, collapsedIslandRect().insetBy(dx: -4, dy: -4)) {
             expand()
         }
     }
@@ -195,7 +199,7 @@ final class NotchWindowController: ObservableObject {
 
     private func repositionForScreenChange() {
         screen = NotchScreenInfo.preferredScreen()
-        window?.setFrameWithAnimation(isExpanded ? expandedFrame() : collapsedFrame())
+        window?.setFrame(expandedFrame(), display: true)
     }
 }
 

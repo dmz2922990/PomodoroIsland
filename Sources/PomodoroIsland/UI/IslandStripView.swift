@@ -20,6 +20,13 @@ struct IslandStripView: View {
         bandHeight + (controller.isExpanded ? NotchScreenInfo.expandedExtension : 0)
     }
 
+    /// 收起 = 刘海+翅膀宽度；展开 = 面板宽度
+    private var islandWidth: CGFloat {
+        controller.isExpanded
+            ? NotchWindowController.panelWidth
+            : NotchScreenInfo.collapsedIslandWidth(on: screen)
+    }
+
     private var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: 0,
@@ -45,7 +52,7 @@ struct IslandStripView: View {
                     .transition(.opacity)
             }
         }
-        .frame(height: totalHeight)
+        .frame(width: islandWidth, height: totalHeight)
         .contentShape(shape)
         .onTapGesture {
             // 展开态点岛屿头部收起（收起态由全局点击监听负责展开）
