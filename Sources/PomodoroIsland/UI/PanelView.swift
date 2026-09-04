@@ -1,13 +1,14 @@
 import SwiftUI
 import AppKit
 
-/// 展开后的任务面板
+/// 展开后的任务面板：主页面（计时+任务）与设置页二选一，内嵌切换
 struct PanelView: View {
 
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var controller: NotchWindowController
 
+    @State private var showSettings = false
     @State private var newTaskTitle = ""
     @State private var hoveredTask: UUID?
 
@@ -15,22 +16,27 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            timerSection
-                .padding(.top, 14)
-                .padding(.bottom, 12)
+            if showSettings {
+                SettingsPage()
+                    .transition(.opacity)
+            } else {
+                timerSection
+                    .padding(.top, 14)
+                    .padding(.bottom, 12)
 
-            controls
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+                controls
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
 
-            divider
+                divider
 
-            taskList
-                .padding(.vertical, 8)
+                taskList
+                    .padding(.vertical, 8)
 
-            addTaskField
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                addTaskField
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+            }
 
             divider
 
@@ -38,6 +44,7 @@ struct PanelView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
         }
+        .animation(.easeInOut(duration: 0.15), value: showSettings)
         .frame(width: NotchWindowController.panelWidth,
                height: NotchWindowController.panelHeight,
                alignment: .top)
@@ -75,19 +82,13 @@ struct PanelView: View {
     private var phaseSubtitle: String {
         switch engine.phase {
         case .idle:
-            let focus = store.settings.focusMinutes
-            let willBreak = engine.running ? "" : nextActionHint
-            return "下一个专注 \(focus) 分钟 · \(willBreak)"
+            return "下一个专注 \(store.settings.focusMinutes) 分钟 · 悬停刘海开始"
         default:
             if engine.isOvertime {
                 return "超时中 · 番茄在腐烂，快休息 🍂"
             }
             return engine.running ? "保持节奏，别分心 💪" : "已暂停"
         }
-    }
-
-    private var nextActionHint: String {
-        "悬停刘海开始"
     }
 
     // MARK: - 控制区
@@ -244,7 +245,14 @@ struct PanelView: View {
 
             Spacer()
 
-            SettingsMenuView()
+            IconButton(
+                system: showSettings ? "gearshape.fill" : "gearshape",
+                help: showSettings ? "返回" : "设置"
+            ) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showSettings.toggle()
+                }
+            }
 
             IconButton(system: "xmark.circle", help: "退出 PomodoroIsland") {
                 NSApp.terminate(nil)
@@ -253,54 +261,65 @@ struct PanelView: View {
     }
 }
 
-/// 设置菜单：独立子视图，只依赖 store。
-/// 计时引擎每秒刷新会重建 PanelView，但本视图输入不变会被 SwiftUI 跳过，
-/// 从而避免打开中的 NSMenu 被反复重建导致二级菜单闪烁。
-private struct SettingsMenuView: View {
+// MARK: - 设置页（内嵌，覆盖计时与任务区域）
+
+private struct SettingsPage: View {
+
     @EnvironmentObject private var store: TaskStore
 
     var body: some View {
-        Menu {
-            Menu("专注时长") {
-                ForEach([15, 20, 25, 30, 45, 50, 60], id: \.self) { m in
-                    Button("\(m) 分钟") {
-                        update { $0.focusMinutes = m }
-                    }
+        ScrollView {
+            VStack(spacing: 16) {
+                HStack {
+                    Text("设置")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Text("点底部齿轮返回")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textTertiary)
                 }
+                .padding(.top, 2)
+
+                DurationChipsRow(
+                    title: "专注时长",
+                    values: [15, 20, 25, 30, 45, 50, 60],
+                    selection: store.settings.focusMinutes
+                ) { v in update { $0.focusMinutes = v } }
+
+                DurationChipsRow(
+                    title: "小憩时长",
+                    values: [3, 5, 10],
+                    selection: store.settings.shortBreakMinutes
+                ) { v in update { $0.shortBreakMinutes = v } }
+
+                DurationChipsRow(
+                    title: "长休息时长",
+                    values: [10, 15, 20, 30],
+                    selection: store.settings.longBreakMinutes
+                ) { v in update { $0.longBreakMinutes = v } }
+
+                DurationChipsRow(
+                    title: "几轮专注后长休息",
+                    values: [2, 3, 4, 6],
+                    selection: store.settings.longBreakEvery
+                ) { v in update { $0.longBreakEvery = v } }
+
+                SettingToggleRow(
+                    title: "结束后自动开始休息",
+                    isOn: store.settings.autoStartBreak
+                ) { on in update { $0.autoStartBreak = on } }
+
+                SettingToggleRow(
+                    title: "提示音",
+                    isOn: store.settings.soundOn
+                ) { on in update { $0.soundOn = on } }
             }
-            Menu("小憩时长") {
-                ForEach([3, 5, 10], id: \.self) { m in
-                    Button("\(m) 分钟") {
-                        update { $0.shortBreakMinutes = m }
-                    }
-                }
-            }
-            Menu("长休息时长") {
-                ForEach([10, 15, 20, 30], id: \.self) { m in
-                    Button("\(m) 分钟") {
-                        update { $0.longBreakMinutes = m }
-                    }
-                }
-            }
-            Toggle("结束后自动开始休息", isOn: Binding(
-                get: { store.settings.autoStartBreak },
-                set: { on in update { $0.autoStartBreak = on } }
-            ))
-            Toggle("提示音", isOn: Binding(
-                get: { store.settings.soundOn },
-                set: { on in update { $0.soundOn = on } }
-            ))
-        } label: {
-            Image(systemName: "gearshape")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 12)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("设置")
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func update(_ mutate: (inout AppSettings) -> Void) {
@@ -310,52 +329,63 @@ private struct SettingsMenuView: View {
     }
 }
 
-// MARK: - 子组件
-
-/// 圆形小图标按钮
-struct IconButton: View {
-    let system: String
-    let help: String
-    let action: () -> Void
+/// 时长选择行：一排胶囊选项，选中高亮
+private struct DurationChipsRow: View {
+    let title: String
+    let values: [Int]
+    let selection: Int
+    let onChange: (Int) -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 12, weight: .semibold))
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .semibold))
                 .foregroundStyle(Theme.textSecondary)
-                .frame(width: 30, height: 30)
+            HStack(spacing: 6) {
+                ForEach(values, id: \.self) { v in
+                    chip(v)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func chip(_ v: Int) -> some View {
+        let selected = v == selection
+        return Button {
+            onChange(v)
+        } label: {
+            Text("\(v)")
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(selected ? Color.black : Theme.textSecondary)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
                 .background(
-                    Circle().fill(Color.white.opacity(0.07))
+                    Capsule().fill(selected ? Theme.accent(for: .focus) : Color.white.opacity(0.06))
                 )
-                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help(help)
     }
 }
 
-/// 主操作按钮
-struct ActionButton: View {
+/// 开关行
+private struct SettingToggleRow: View {
     let title: String
-    let accent: Color
-    var filled = true
-    let action: () -> Void
+    let isOn: Bool
+    let onChange: (Bool) -> Void
 
     var body: some View {
-        Button(action: action) {
+        HStack {
             Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(filled ? Color.black : accent)
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .background(
-                    Capsule().fill(filled ? accent : accent.opacity(0.16))
-                )
-                .overlay(
-                    Capsule().strokeBorder(accent.opacity(filled ? 0 : 0.5), lineWidth: 1)
-                )
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Toggle("", isOn: Binding(get: { isOn }, set: { onChange($0) }))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -436,5 +466,54 @@ struct TaskRow: View {
         df.locale = Locale(identifier: "zh_CN")
         parts.append(df.localizedString(for: task.createdAt, relativeTo: Date()) + "创建")
         return parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - 子组件
+
+/// 圆形小图标按钮
+struct IconButton: View {
+    let system: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle().fill(Color.white.opacity(0.07))
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+/// 主操作按钮
+struct ActionButton: View {
+    let title: String
+    let accent: Color
+    var filled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(filled ? Color.black : accent)
+                .frame(maxWidth: .infinity)
+                .frame(height: 32)
+                .background(
+                    Capsule().fill(filled ? accent : accent.opacity(0.16))
+                )
+                .overlay(
+                    Capsule().strokeBorder(accent.opacity(filled ? 0 : 0.5), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
