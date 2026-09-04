@@ -9,6 +9,11 @@ enum IconLibrary {
     /// 腐烂序列：红斑 → 塌烂 → 化为泥土
     static let rot: [NSImage] = loadFrames(prefix: "rot")
 
+    /// 空闲（待开始）状态：一块未播种的土
+    static let wait: NSImage? = Bundle.module
+        .url(forResource: "wait", withExtension: "png", subdirectory: "frames")
+        .flatMap(NSImage.init(contentsOf:))
+
     /// 无任务时的绿色小苗
     static var sprout: NSImage? { growth.first }
 

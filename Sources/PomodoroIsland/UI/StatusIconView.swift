@@ -29,7 +29,11 @@ struct StatusIconView: View {
     }
 
     private var currentImage: NSImage? {
-        guard phase == .focus || isOvertime else { return IconLibrary.sprout }
+        guard phase == .focus || isOvertime else {
+            // 空闲：未播种的土；休息：小苗
+            if phase == .idle { return IconLibrary.wait ?? IconLibrary.sprout }
+            return IconLibrary.sprout
+        }
         let frames = isOvertime ? IconLibrary.rot : IconLibrary.growth
         guard !frames.isEmpty else { return IconLibrary.sprout }
         let fraction = isOvertime ? overtimeFraction : progress
