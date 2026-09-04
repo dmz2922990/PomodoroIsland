@@ -133,7 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let phase = engine.phase
         let symbol: String
         switch phase {
-        case .focus: symbol = "🍅"
+        case .focus: symbol = engine.isOvertime ? "🍂" : "🍅"
         case .shortBreak: symbol = "☕"
         case .longBreak: symbol = "🌴"
         case .idle: symbol = "🐚"

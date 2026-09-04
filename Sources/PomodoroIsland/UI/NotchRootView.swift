@@ -77,10 +77,14 @@ struct ExpandedIslandView: View {
 
     private var expandedHeader: some View {
         HStack(spacing: 8) {
-            Image(systemName: engine.phase.symbolName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.accent(for: engine.phase))
-                .frame(width: 20)
+            StatusIconView(
+                phase: engine.phase,
+                progress: engine.progress,
+                isOvertime: engine.isOvertime,
+                overtimeFraction: engine.overtimeFraction,
+                size: 26
+            )
+            .frame(width: 30)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(store.currentTask?.title ?? "未选择任务")

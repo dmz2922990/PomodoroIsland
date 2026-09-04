@@ -9,7 +9,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "PomodoroIsland",
-            path: "Sources/PomodoroIsland"
+            path: "Sources/PomodoroIsland",
+            resources: [
+                .copy("Icon/frames")
+            ]
         )
     ]
 )

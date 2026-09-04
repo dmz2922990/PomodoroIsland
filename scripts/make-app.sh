@@ -15,9 +15,16 @@ swift build -c release
 
 echo "==> 组装 ${APP_DIR}"
 rm -rf "${APP_DIR}"
-mkdir -p "${APP_DIR}/Contents/MacOS"
+mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
+
+# SPM 资源包（图标帧等），实际位于带 triple 的子目录
+RESOURCE_BUNDLE="$(ls -d .build/arm64-apple-macosx/release/${APP_NAME}_*.bundle 2>/dev/null | head -1)"
+if [ -n "${RESOURCE_BUNDLE}" ]; then
+    cp -R "${RESOURCE_BUNDLE}" "${APP_DIR}/Contents/Resources/"
+    echo "    已打包资源: $(basename "${RESOURCE_BUNDLE}")"
+fi
 
 cat > "${APP_DIR}/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

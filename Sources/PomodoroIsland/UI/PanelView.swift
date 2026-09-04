@@ -79,6 +79,9 @@ struct PanelView: View {
             let willBreak = engine.running ? "" : nextActionHint
             return "下一个专注 \(focus) 分钟 · \(willBreak)"
         default:
+            if engine.isOvertime {
+                return "超时中 · 番茄在腐烂，快休息 🍂"
+            }
             return engine.running ? "保持节奏，别分心 💪" : "已暂停"
         }
     }

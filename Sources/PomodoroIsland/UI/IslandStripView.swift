@@ -40,14 +40,18 @@ struct IslandStripView: View {
     // MARK: - 翅膀内容（左侧状态+倒计时，右侧今日番茄数；中段是物理刘海留空）
 
     private var collapsedWings: some View {
-        HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                phaseDot
-                Text(engine.displayText)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-            }
+        HStack(spacing: 6) {
+            StatusIconView(
+                phase: engine.phase,
+                progress: engine.progress,
+                isOvertime: engine.isOvertime,
+                overtimeFraction: engine.overtimeFraction,
+                size: 17
+            )
+            Text(engine.displayText)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
             .frame(width: NotchScreenInfo.collapsedWing - 12, alignment: .leading)
             .frame(maxHeight: .infinity)
 
@@ -65,12 +69,5 @@ struct IslandStripView: View {
             .frame(maxHeight: .infinity)
         }
         .padding(.horizontal, 10)
-    }
-
-    private var phaseDot: some View {
-        Circle()
-            .fill(Theme.accent(for: engine.phase))
-            .frame(width: 7, height: 7)
-            .opacity(engine.running ? 1 : 0.55)
     }
 }

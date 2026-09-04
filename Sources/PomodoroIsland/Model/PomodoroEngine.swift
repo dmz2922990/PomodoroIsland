@@ -38,6 +38,10 @@ final class PomodoroEngine: ObservableObject {
     @Published private(set) var pausedRemainder: TimeInterval?
     /// 每 0.5s 更新的"当前时间"，驱动视图重算剩余时间
     @Published private(set) var now = Date()
+    /// 超时（专注到点后未停下）的开始时刻；nil = 非超时
+    @Published private(set) var overtimeStartedAt: Date?
+    /// 暂停时冻结的超时已过秒数
+    @Published private(set) var pausedOvertimeSeconds: TimeInterval?
 
     /// 阶段切换（含自然结束、跳过）后触发，携带上一阶段是否自然完成
     var onPhaseFinished: ((_ finishedNaturally: Bool, _ from: Phase) -> Void)?
@@ -62,6 +66,25 @@ final class PomodoroEngine: ObservableObject {
         ticker = timer
     }
 
+    // MARK: - 超时（腐烂）状态
+
+    /// 超时后从红果到完全烂掉所需的时长
+    static let rotDuration: TimeInterval = 5 * 60
+
+    /// 超时已持续秒数（运行中实时，暂停时冻结）
+    var overtimeElapsed: TimeInterval? {
+        if let t = overtimeStartedAt { return now.timeIntervalSince(t) }
+        if let p = pausedOvertimeSeconds { return p }
+        return nil
+    }
+
+    var isOvertime: Bool { overtimeElapsed != nil }
+
+    /// 腐烂进度 0（刚超时的红果）→ 1（化为泥土）
+    var overtimeFraction: Double {
+        min(1, max(0, (overtimeElapsed ?? 0) / Self.rotDuration))
+    }
+
     // MARK: - 派生状态
 
     var phaseDuration: TimeInterval {
@@ -75,6 +98,7 @@ final class PomodoroEngine: ObservableObject {
 
     /// 剩余秒数（向上取整，显示 25:00 起步）
     var remainingSeconds: TimeInterval {
+        if isOvertime { return 0 }
         if running, let endsAt = endsAt {
             return max(0, endsAt.timeIntervalSince(now))
         }
@@ -91,6 +115,10 @@ final class PomodoroEngine: ObservableObject {
     }
 
     var displayText: String {
+        if let elapsed = overtimeElapsed {
+            let s = Int(elapsed.rounded())
+            return String(format: "+%02d:%02d", s / 60, s % 60)
+        }
         let secs = Int(remainingSeconds.rounded(.up))
         return String(format: "%02d:%02d", secs / 60, secs % 60)
     }
@@ -111,12 +139,23 @@ final class PomodoroEngine: ObservableObject {
 
     func togglePause() {
         if running {
-            pausedRemainder = max(0, endsAt?.timeIntervalSinceNow ?? 0)
+            if let t = overtimeStartedAt {
+                pausedOvertimeSeconds = now.timeIntervalSince(t)
+            } else {
+                pausedRemainder = max(0, endsAt?.timeIntervalSince(now) ?? 0)
+            }
             running = false
             endsAt = nil
+            overtimeStartedAt = nil
+        } else if let ot = pausedOvertimeSeconds {
+            // 从暂停的超时状态恢复，继续腐烂
+            overtimeStartedAt = now.addingTimeInterval(-ot)
+            pausedOvertimeSeconds = nil
+            endsAt = nil
+            running = true
+            trace("resume-overtime elapsed=\(Int(ot))")
         } else {
-            let remain = pausedRemainder ?? phaseDuration
-            begin(duration: remain)
+            begin(duration: pausedRemainder ?? phaseDuration)
         }
     }
 
@@ -131,13 +170,26 @@ final class PomodoroEngine: ObservableObject {
         running = false
         endsAt = nil
         pausedRemainder = nil
+        overtimeStartedAt = nil
+        pausedOvertimeSeconds = nil
     }
 
     private func begin(duration: TimeInterval) {
         guard duration > 0 else { return }
         endsAt = Date().addingTimeInterval(duration)
         running = true
+        overtimeStartedAt = nil
+        pausedOvertimeSeconds = nil
         trace("phase=\(phase.rawValue) running=true duration=\(Int(duration))")
+    }
+
+    /// 专注到点但用户没停：记录番茄并进入超时模式，果子开始腐烂
+    private func beginOvertime() {
+        overtimeStartedAt = Date()
+        store.recordFocusEnd(for: store.currentTaskId)
+        notify(title: "🍅 专注到点！", body: "已记录 1 个番茄。还在继续？小心果子烂掉～")
+        playSound()
+        trace("overtime-begin")
     }
 
     private func nextBreakPhase() -> Phase {
@@ -150,15 +202,24 @@ final class PomodoroEngine: ObservableObject {
         running = false
         endsAt = nil
         pausedRemainder = nil
+        overtimeStartedAt = nil
+        pausedOvertimeSeconds = nil
     }
 
     private func tick() {
         now = Date()
         guard running, let endsAt = endsAt else { return }
-        if now >= endsAt {
-            let from = phase
-            endPhase(finishedNaturally: true, from: from)
+        guard now >= endsAt else { return }
+
+        if phase == .focus, overtimeStartedAt != nil {
+            // 已在超时模式中，任由果子腐烂，直到用户停下
+            return
         }
+        if phase == .focus, !store.settings.autoStartBreak {
+            beginOvertime()
+            return
+        }
+        endPhase(finishedNaturally: true, from: phase)
     }
 
     private func endPhase(finishedNaturally: Bool, from: Phase) {
