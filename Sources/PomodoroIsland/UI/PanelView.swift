@@ -338,67 +338,79 @@ struct PanelView: View {
 private struct SettingsPage: View {
 
     @EnvironmentObject private var store: TaskStore
+    @State private var settingsTab: SettingsTab = .timer
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                HStack {
-                    Text("设置")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Theme.textPrimary)
+            VStack(spacing: 14) {
+                HStack(spacing: 4) {
+                    CapsuleSegmentButton(title: "计时", selected: settingsTab == .timer) {
+                        withAnimation(.easeInOut(duration: 0.15)) { settingsTab = .timer }
+                    }
+                    CapsuleSegmentButton(title: "通用", selected: settingsTab == .general) {
+                        withAnimation(.easeInOut(duration: 0.15)) { settingsTab = .general }
+                    }
                     Spacer()
                     Text("点底部齿轮返回")
-                        .font(.system(size: 10))
+                        .font(.system(size: 9.5))
                         .foregroundStyle(Theme.textTertiary)
                 }
                 .padding(.top, 2)
 
-                DurationChipsRow(
-                    title: "专注时长",
-                    values: [15, 20, 25, 30, 45, 50, 60],
-                    selection: store.settings.focusMinutes
-                ) { v in update { $0.focusMinutes = v } }
+                if settingsTab == .timer {
+                    VStack(spacing: 16) {
+                        DurationChipsRow(
+                            title: "专注时长",
+                            values: [15, 20, 25, 30, 45, 50, 60],
+                            selection: store.settings.focusMinutes
+                        ) { v in update { $0.focusMinutes = v } }
 
-                DurationChipsRow(
-                    title: "小憩时长",
-                    values: [3, 5, 10],
-                    selection: store.settings.shortBreakMinutes
-                ) { v in update { $0.shortBreakMinutes = v } }
+                        DurationChipsRow(
+                            title: "小憩时长",
+                            values: [3, 5, 10],
+                            selection: store.settings.shortBreakMinutes
+                        ) { v in update { $0.shortBreakMinutes = v } }
 
-                DurationChipsRow(
-                    title: "长休息时长",
-                    values: [10, 15, 20, 30],
-                    selection: store.settings.longBreakMinutes
-                ) { v in update { $0.longBreakMinutes = v } }
+                        DurationChipsRow(
+                            title: "长休息时长",
+                            values: [10, 15, 20, 30],
+                            selection: store.settings.longBreakMinutes
+                        ) { v in update { $0.longBreakMinutes = v } }
 
-                DurationChipsRow(
-                    title: "几轮专注后长休息",
-                    values: [2, 3, 4, 6],
-                    selection: store.settings.longBreakEvery
-                ) { v in update { $0.longBreakEvery = v } }
+                        DurationChipsRow(
+                            title: "几轮专注后长休息",
+                            values: [2, 3, 4, 6],
+                            selection: store.settings.longBreakEvery
+                        ) { v in update { $0.longBreakEvery = v } }
 
-                SettingToggleRow(
-                    title: "结束后自动开始休息",
-                    isOn: store.settings.autoStartBreak
-                ) { on in update { $0.autoStartBreak = on } }
+                        SettingToggleRow(
+                            title: "结束后自动开始休息",
+                            isOn: store.settings.autoStartBreak
+                        ) { on in update { $0.autoStartBreak = on } }
+                    }
+                    .transition(.opacity)
+                } else {
+                    VStack(spacing: 14) {
+                        SettingToggleRow(
+                            title: "提示音",
+                            isOn: store.settings.soundOn
+                        ) { on in update { $0.soundOn = on } }
 
-                SettingToggleRow(
-                    title: "提示音",
-                    isOn: store.settings.soundOn
-                ) { on in update { $0.soundOn = on } }
+                        Rectangle()
+                            .fill(Color.white.opacity(0.07))
+                            .frame(height: 1)
 
-                Rectangle()
-                    .fill(Color.white.opacity(0.07))
-                    .frame(height: 1)
-                    .padding(.vertical, 2)
-
-                mcpSection
+                        mcpSection
+                    }
+                    .transition(.opacity)
+                }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.top, 12)
             .padding(.bottom, 12)
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .animation(.easeInOut(duration: 0.15), value: settingsTab)
     }
 
     private func update(_ mutate: (inout AppSettings) -> Void) {
