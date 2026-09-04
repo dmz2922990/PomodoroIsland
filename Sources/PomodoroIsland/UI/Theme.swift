@@ -1,0 +1,72 @@
+import SwiftUI
+
+/// 视觉主题
+enum Theme {
+    /// 岛屿本体：纯黑，与物理刘海融为一体
+    static let islandColor = Color.black
+    /// 展开后的卡片
+    static let cardColor = Color(nsColor: NSColor(calibratedWhite: 0.09, alpha: 0.96))
+    static let cardBorder = Color.white.opacity(0.10)
+
+    static let textPrimary = Color.white
+    static let textSecondary = Color.white.opacity(0.55)
+    static let textTertiary = Color.white.opacity(0.35)
+
+    static func accent(for phase: Phase) -> Color {
+        switch phase {
+        case .focus: return Color(red: 1.0, green: 0.42, blue: 0.34)   // 番茄红
+        case .shortBreak: return Color(red: 0.19, green: 0.72, blue: 0.78) // 青
+        case .longBreak: return Color(red: 0.49, green: 0.42, blue: 0.95)  // 紫
+        case .idle: return Color.white.opacity(0.7)
+        }
+    }
+}
+
+/// 四角可独立设置圆角的矩形（岛屿形状：上小下大）
+struct IslandShape: Shape {
+    var topRadius: CGFloat = 11
+    var bottomRadius: CGFloat = 18
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard rect.width > 0, rect.height > 0 else { return path }
+
+        let tl = min(topRadius, rect.width / 2, rect.height / 2)
+        let tr = tl
+        let bl = min(bottomRadius, rect.width / 2, rect.height / 2)
+        let br = bl
+
+        path.move(to: CGPoint(x: rect.minX + tl, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - tr, y: rect.minY))
+        path.addArc(
+            center: CGPoint(x: rect.maxX - tr, y: rect.minY + tr), radius: tr,
+            startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - br))
+        path.addArc(
+            center: CGPoint(x: rect.maxX - br, y: rect.maxY - br), radius: br,
+            startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.minX + bl, y: rect.maxY))
+        path.addArc(
+            center: CGPoint(x: rect.minX + bl, y: rect.maxY - bl), radius: bl,
+            startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + tl))
+        path.addArc(
+            center: CGPoint(x: rect.minX + tl, y: rect.minY + tl), radius: tl,
+            startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// 展开面板的圆角卡片
+struct CardShape: Shape {
+    var radius: CGFloat = 20
+
+    func path(in rect: CGRect) -> Path {
+        Path(roundedRect: rect, cornerRadius: radius, style: .continuous)
+    }
+}
