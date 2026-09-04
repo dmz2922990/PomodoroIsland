@@ -38,11 +38,9 @@ struct PanelView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
         }
-        .frame(width: 344)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(CardShape().fill(Theme.cardColor))
-        .overlay(CardShape().stroke(Theme.cardBorder, lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.45), radius: 16, y: 6)
+        .frame(width: NotchWindowController.panelWidth,
+               height: NotchWindowController.panelHeight,
+               alignment: .top)
     }
 
     // MARK: - 计时区

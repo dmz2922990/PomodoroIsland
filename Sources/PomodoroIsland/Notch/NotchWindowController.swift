@@ -74,8 +74,13 @@ final class NotchWindowController: ObservableObject {
         mouseWatch.onGlobalClick = { [weak self] point in
             DispatchQueue.main.async { self?.handleGlobalClick(point) }
         }
-        mouseWatch.start()
-        mouseWatch.setClickTracking(true)
+        // 自测模式下不启动真实鼠标监听：物理鼠标移动会取消合成测试的悬停任务，
+        // 干扰 hover-expand 断言（逻辑本身由 handleMouseMove 直接驱动验证）
+        let selfTest = ProcessInfo.processInfo.environment["POMO_SELFTEST"] == "1"
+        if !selfTest {
+            mouseWatch.start()
+            mouseWatch.setClickTracking(true)
+        }
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -108,9 +113,9 @@ final class NotchWindowController: ObservableObject {
 
     private func expandedFrame() -> NSRect {
         let width = Self.panelWidth
-        // 岛屿（菜单栏/刘海高度 + 头部延伸）+ 间隙 + 面板 + 底部留白
+        // 一体岛屿：菜单栏/刘海带 + 头部延伸 + 面板，连续无间隙
         let band = NotchScreenInfo.collapsedIslandHeight(on: screen)
-        let height = band + NotchScreenInfo.expandedExtension + 6 + Self.panelHeight + 8
+        let height = band + NotchScreenInfo.expandedExtension + Self.panelHeight
         let frame = screen.frame
         return NSRect(
             x: frame.midX - width / 2,
