@@ -39,7 +39,12 @@ enum NotchScreenInfo {
         notchSize(on: screen).width + collapsedWing * 2
     }
 
-    /// 收起状态岛屿矩形：刘海两侧加宽，高度动态对齐菜单栏。屏幕坐标系（左下原点），顶边贴屏幕顶。
+    /// 刘海/中央带的宽度
+    static func stripWidth(on screen: NSScreen) -> CGFloat {
+        notchSize(on: screen).width
+    }
+
+    /// 收起状态岛屿矩形：两翼菜单栏高，高度动态对齐菜单栏。屏幕坐标系（左下原点），顶边贴屏幕顶。
     static func collapsedIslandRect(on screen: NSScreen) -> NSRect {
         let strip = stripRect(on: screen)
         let width = strip.width + collapsedWing * 2

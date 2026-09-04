@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// 收起态岛屿：高度动态对齐当前屏幕的菜单栏/刘海。
-/// 左翼：状态像素图标（小苗/生长/腐烂）；右翼：圆形计时环（按轮次变色）。
+/// 收起态岛屿：高度动态对齐当前屏幕的菜单栏/刘海，单条带三段布局。
+/// 左翼：状态像素图标；中央：当前任务标题（内置屏被物理刘海遮挡属设计预期，
+/// 外接显示器可见）；右翼：圆形计时环（按轮次变色）。
 /// （展开态由 ExpandedIslandView 负责）
 struct IslandStripView: View {
 
@@ -30,7 +31,7 @@ struct IslandStripView: View {
     }
 
     var body: some View {
-        collapsedWings
+        content
             .frame(width: islandWidth, height: bandHeight)
             .background(shape.fill(Theme.islandColor))
             .background(shape.strokeBorder(Theme.cardBorder, lineWidth: 0.5))
@@ -38,10 +39,11 @@ struct IslandStripView: View {
             .animation(.easeInOut(duration: 0.15), value: engine.running)
     }
 
-    // MARK: - 翅膀内容（左：状态图标；中：物理刘海留空；右：圆形计时环）
+    // MARK: - 三段内容
 
-    private var collapsedWings: some View {
+    private var content: some View {
         HStack(spacing: 0) {
+            // 左翼：状态图标
             StatusIconView(
                 phase: engine.phase,
                 progress: engine.progress,
@@ -49,23 +51,38 @@ struct IslandStripView: View {
                 overtimeFraction: engine.overtimeFraction,
                 size: 18
             )
-            .frame(width: NotchScreenInfo.collapsedWing - 6, alignment: .center)
+            .frame(width: NotchScreenInfo.collapsedWing - 4, alignment: .center)
             .frame(maxHeight: .infinity)
 
-            // 中段是物理刘海（不可显示），留空
-            Spacer(minLength: 0)
+            // 中央：当前任务（刘海遮挡为预期设计）
+            Group {
+                if let task = store.currentTask {
+                    Text(task.title)
+                        .foregroundStyle(Color.white.opacity(0.92))
+                } else {
+                    Text("未选择任务")
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.2), value: store.currentTask?.title)
 
+            // 右翼：计时环
             RoundTimerBadge(
                 progress: ringProgress,
                 color: ringColor
             )
-            .frame(width: NotchScreenInfo.collapsedWing - 6, alignment: .center)
+            .frame(width: NotchScreenInfo.collapsedWing - 4, alignment: .center)
             .frame(maxHeight: .infinity)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 3)
     }
 
-    // MARK: - 计时环的状态
+    // MARK: - 计时环状态
 
     /// 专注进行中的当天轮次（第 1 轮 = 白，第 2 轮 = 黄，第 3 轮 = 红，之后循环）
     private var focusRound: Int { store.todayFocusCount + 1 }
