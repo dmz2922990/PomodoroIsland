@@ -11,9 +11,6 @@ struct TaskItem: Codable, Identifiable, Equatable {
     var pomosPlanned: Int?
     var createdAt: Date = Date()
     var finishedAt: Date?
-
-    /// 归档时未完成任务置顶排序用
-    var sortKey: Date { isDone ? (finishedAt ?? .distantPast) : createdAt }
 }
 
 /// 应用设置
@@ -72,17 +69,20 @@ final class TaskStore: ObservableObject {
 
     // MARK: - 任务操作
 
+    /// 新任务插入到未完成列表的末尾（最上方优先级最高）
     func addTask(title: String) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let item = TaskItem(title: trimmed)
-        tasks.insert(item, at: 0)
+        let insertIndex = tasks.firstIndex(where: { $0.isDone }) ?? tasks.count
+        tasks.insert(item, at: insertIndex)
         if currentTaskId == nil {
             currentTaskId = item.id
         }
         scheduleSave()
     }
 
+    /// 完成当前任务后自动切到最上方（最高优先级）的未完成任务
     func toggleDone(_ id: UUID) {
         guard let idx = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[idx].isDone.toggle()
@@ -104,6 +104,21 @@ final class TaskStore: ObservableObject {
     func setCurrent(_ id: UUID) {
         guard tasks.contains(where: { $0.id == id && !$0.isDone }) else { return }
         currentTaskId = id
+        scheduleSave()
+    }
+
+    /// 拖拽排序：在对应分页（未完成/已完成）内移动任务
+    func moveTask(inDoneList done: Bool, fromId: UUID, toId: UUID) {
+        let indices = tasks.indices.filter { tasks[$0].isDone == done }
+        var list = indices.map { tasks[$0] }
+        guard let from = list.firstIndex(where: { $0.id == fromId }),
+              let to = list.firstIndex(where: { $0.id == toId }),
+              from != to else { return }
+        let item = list.remove(at: from)
+        list.insert(item, at: to)
+        for (i, idx) in indices.enumerated() {
+            tasks[idx] = list[i]
+        }
         scheduleSave()
     }
 
@@ -199,7 +214,8 @@ final class TaskStore: ObservableObject {
         do {
             let decoder = JSONDecoder()
             let snapshot = try decoder.decode(Snapshot.self, from: data)
-            tasks = snapshot.tasks.sorted { $0.sortKey > $1.sortKey }
+            // 保留用户手动排序的顺序（数组顺序即优先级，最上方最高）
+            tasks = snapshot.tasks
             settings = snapshot.settings
             currentTaskId = snapshot.currentTaskId
             focusLog = snapshot.focusLog

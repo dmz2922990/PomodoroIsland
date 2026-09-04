@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 /// 任务列表分页
 private enum TaskTab {
@@ -20,6 +21,7 @@ struct PanelView: View {
     @State private var confirmingQuit = false
     @State private var quitConfirmWork: DispatchWorkItem?
     @State private var taskTab: TaskTab = .open
+    @State private var draggingTaskId: UUID?
 
     private var accent: Color { Theme.accent(for: engine.phase) }
 
@@ -203,6 +205,17 @@ struct PanelView: View {
                         onToggle: { store.toggleDone(task.id) },
                         onDelete: { store.deleteTask(task.id) }
                     )
+                    .opacity(draggingTaskId == task.id ? 0.45 : 1)
+                    .onDrag {
+                        draggingTaskId = task.id
+                        return NSItemProvider(object: task.id.uuidString as NSString)
+                    }
+                    .onDrop(of: [.text], delegate: TaskDropDelegate(
+                        rowId: task.id,
+                        tab: taskTab,
+                        store: store,
+                        draggingTaskId: $draggingTaskId
+                    ))
                 }
 
                 emptyState
@@ -461,6 +474,34 @@ private struct SettingToggleRow: View {
                 .labelsHidden()
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// 拖拽排序代理：拖动行进入目标行时实时重排（同分页内移动）
+private struct TaskDropDelegate: DropDelegate {
+    let rowId: UUID
+    let tab: TaskTab
+    let store: TaskStore
+    @Binding var draggingTaskId: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingId = draggingTaskId, draggingId != rowId else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            store.moveTask(
+                inDoneList: tab == .done,
+                fromId: draggingId,
+                toId: rowId
+            )
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingTaskId = nil
+        return true
     }
 }
 
