@@ -99,13 +99,16 @@ final class PomodoroEngine: ObservableObject {
     /// 剩余秒数（向上取整，显示 25:00 起步）
     var remainingSeconds: TimeInterval {
         if isOvertime { return 0 }
+        let base: TimeInterval
         if running, let endsAt = endsAt {
-            return max(0, endsAt.timeIntervalSince(now))
+            base = max(0, endsAt.timeIntervalSince(now))
+        } else if let pausedRemainder = pausedRemainder {
+            base = max(0, pausedRemainder)
+        } else {
+            base = phaseDuration
         }
-        if let pausedRemainder = pausedRemainder {
-            return max(0, pausedRemainder)
-        }
-        return phaseDuration
+        // now 是 0.5s 粒度的陈旧时钟，刚启动的瞬间可能略超时长，钳制
+        return min(base, phaseDuration)
     }
 
     var progress: Double {
@@ -138,6 +141,7 @@ final class PomodoroEngine: ObservableObject {
     }
 
     func togglePause() {
+        now = Date()  // 暂停/恢复瞬间校准时钟
         if running {
             if let t = overtimeStartedAt {
                 pausedOvertimeSeconds = now.timeIntervalSince(t)
@@ -176,6 +180,7 @@ final class PomodoroEngine: ObservableObject {
 
     private func begin(duration: TimeInterval) {
         guard duration > 0 else { return }
+        now = Date()  // 空闲期间时钟冻结，启动前先校准，避免首帧剩余时间偏大
         endsAt = Date().addingTimeInterval(duration)
         running = true
         overtimeStartedAt = nil
