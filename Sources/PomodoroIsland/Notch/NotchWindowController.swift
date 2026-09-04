@@ -20,7 +20,7 @@ enum TraceLog {
 final class NotchWindowController: ObservableObject {
 
     static let panelWidth: CGFloat = 380
-    static let panelHeight: CGFloat = 500
+    static let panelHeight: CGFloat = 492
     /// 判定"离开面板"的外边距
     static let leaveMargin: CGFloat = 14
     /// 悬停停留多久才展开（毫秒）
@@ -53,6 +53,8 @@ final class NotchWindowController: ObservableObject {
 
     func start(rootView: some View) {
         let panel = NotchPanel(contentRect: collapsedFrame())
+        // 根视图内已 .ignoresSafeArea()：窗口整体位于屏幕安全区（刘海）内，
+        // 若不忽略安全区，SwiftUI 会把岛屿往下推出一个刘海的高度
         panel.contentView = NSHostingView(rootView: rootView)
         panel.orderFrontRegardless()
         window = panel
@@ -96,13 +98,15 @@ final class NotchWindowController: ObservableObject {
 
     private var stripRect: NSRect { NotchScreenInfo.stripRect(on: screen) }
 
-    private func collapsedFrame() -> NSRect { stripRect }
+    private func collapsedFrame() -> NSRect {
+        NotchScreenInfo.islandRect(on: screen, expanded: false)
+    }
 
     private func expandedFrame() -> NSRect {
         let strip = stripRect
         let width = Self.panelWidth
-        // 岛屿高度 + 与面板的间隙 + 面板高度（含底部留白）
-        let height = strip.height + 6 + Self.panelHeight
+        // 岛屿（刘海+头部延伸）+ 间隙 + 面板 + 底部留白
+        let height = strip.height + NotchScreenInfo.expandedExtension + 6 + Self.panelHeight + 8
         let frame = screen.frame
         return NSRect(
             x: frame.midX - width / 2,
@@ -156,8 +160,9 @@ final class NotchWindowController: ObservableObject {
                 scheduleCollapse()
             }
         } else {
-            // 悬停在刘海条内稍作停留后展开
-            if NSPointInRect(point, stripRect.insetBy(dx: -4, dy: -4)) {
+            // 悬停在岛屿（刘海+下巴）内稍作停留后展开
+            let hoverRect = collapsedFrame().insetBy(dx: -4, dy: -4)
+            if NSPointInRect(point, hoverRect) {
                 dwellWork?.cancel()
                 let work = DispatchWorkItem { [weak self] in
                     self?.expand()
@@ -172,7 +177,7 @@ final class NotchWindowController: ObservableObject {
     }
 
     private func handleGlobalClick(_ point: NSPoint) {
-        if !isExpanded, NSPointInRect(point, stripRect.insetBy(dx: -4, dy: -4)) {
+        if !isExpanded, NSPointInRect(point, collapsedFrame().insetBy(dx: -4, dy: -4)) {
             expand()
         }
     }

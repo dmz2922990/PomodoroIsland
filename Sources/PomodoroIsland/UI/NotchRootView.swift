@@ -12,6 +12,7 @@ struct NotchRootView: View {
 
                 if controller.isExpanded {
                     PanelView()
+                        .frame(height: 492)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)),
                             removal: .opacity
@@ -22,5 +23,6 @@ struct NotchRootView: View {
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: controller.isExpanded)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea()
     }
 }

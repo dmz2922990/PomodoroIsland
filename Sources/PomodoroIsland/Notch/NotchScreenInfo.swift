@@ -8,6 +8,23 @@ enum NotchScreenInfo {
     /// 典型 MacBook 刘海的近似尺寸（无真实刘海时使用）
     static let fallbackSize = CGSize(width: 200, height: 32)
 
+    /// 收起状态下刘海向下延伸的"下巴"高度（计时内容显示区，物理刘海本身无法显示像素）
+    static let collapsedExtension: CGFloat = 24
+    /// 展开状态下岛屿头部的延伸高度
+    static let expandedExtension: CGFloat = 44
+
+    /// 岛屿矩形：刘海区域 + 向下延伸。屏幕坐标系（左下原点），顶边贴屏幕顶。
+    static func islandRect(on screen: NSScreen, expanded: Bool) -> NSRect {
+        let strip = stripRect(on: screen)
+        let ext = expanded ? expandedExtension : collapsedExtension
+        return NSRect(
+            x: strip.minX,
+            y: strip.minY - ext,
+            width: strip.width,
+            height: strip.height + ext
+        )
+    }
+
     /// 优先返回带刘海的内置屏幕，否则主屏幕
     static func preferredScreen() -> NSScreen {
         if let builtin = NSScreen.screens.first(where: { $0.hasPhysicalNotch }) {
