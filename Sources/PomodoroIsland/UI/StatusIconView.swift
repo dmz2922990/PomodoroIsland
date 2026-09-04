@@ -25,7 +25,8 @@ struct StatusIconView: View {
                 Circle().fill(Theme.accent(for: phase)).opacity(0.85)
             }
         }
-        .frame(width: size, height: size)
+        // 底部对齐：所有帧共享同一条"地面线"（空闲的土块与生长帧的土面齐平）
+        .frame(width: size, height: size, alignment: .bottom)
     }
 
     private var currentImage: NSImage? {
