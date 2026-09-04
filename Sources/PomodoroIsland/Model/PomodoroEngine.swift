@@ -183,10 +183,10 @@ final class PomodoroEngine: ObservableObject {
         trace("phase=\(phase.rawValue) running=true duration=\(Int(duration))")
     }
 
-    /// 专注到点但用户没停：记录番茄并进入超时模式，果子开始腐烂
+    /// 专注到点但用户没停：记录番茄（超时，不计轮次）并进入腐烂模式
     private func beginOvertime() {
         overtimeStartedAt = Date()
-        store.recordFocusEnd(for: store.currentTaskId)
+        store.recordFocusEnd(for: store.currentTaskId, onTime: false)
         notify(title: "🍅 专注到点！", body: "已记录 1 个番茄。还在继续？小心果子烂掉～")
         playSound()
         trace("overtime-begin")

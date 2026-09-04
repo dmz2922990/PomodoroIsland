@@ -84,8 +84,8 @@ struct IslandStripView: View {
 
     // MARK: - 计时环状态
 
-    /// 专注进行中的当天轮次（第 1 轮 = 白，第 2 轮 = 黄，第 3 轮 = 红，之后循环）
-    private var focusRound: Int { store.todayFocusCount + 1 }
+    /// 专注进行中的当天轮次（按按时完成的番茄数；超时的不计轮）
+    private var focusRound: Int { store.todayOnTimeCount + 1 }
 
     private var ringColor: Color {
         if engine.isOvertime {
@@ -93,9 +93,10 @@ struct IslandStripView: View {
         }
         switch engine.phase {
         case .focus:
-            switch (focusRound - 1) % 3 {
-            case 0: return .white
-            case 1: return Color(red: 1.0, green: 0.84, blue: 0.25)
+            // 第 1 轮白、第 2 轮黄、第 3 轮起一直红
+            switch focusRound {
+            case 1: return .white
+            case 2: return Color(red: 1.0, green: 0.84, blue: 0.25)
             default: return Color(red: 0.95, green: 0.30, blue: 0.25)
             }
         case .shortBreak, .longBreak:

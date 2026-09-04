@@ -29,18 +29,31 @@ struct AppSettings: Codable, Equatable {
     var soundOn: Bool = true
 }
 
+/// 一次完成番茄的记录
+struct FocusEntry: Codable, Equatable {
+    var date: Date
+    /// 是否按时完成（超时腐烂的不计入轮次）
+    var onTime: Bool
+}
+
 /// 任务与设置的全局存储（JSON 持久化到 Application Support）
 final class TaskStore: ObservableObject {
 
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var settings = AppSettings()
     @Published var currentTaskId: UUID?
-    /// 每个完成番茄的结束时间，用于统计"今日"
-    @Published private(set) var focusLog: [Date] = []
+    /// 每个完成番茄的记录，用于统计"今日"与轮次
+    @Published private(set) var focusLog: [FocusEntry] = []
 
     var todayFocusCount: Int {
         let cal = Calendar.current
-        return focusLog.filter { cal.isDateInToday($0) }.count
+        return focusLog.filter { cal.isDateInToday($0.date) }.count
+    }
+
+    /// 今天按时完成的番茄数（轮次颜色依据）
+    var todayOnTimeCount: Int {
+        let cal = Calendar.current
+        return focusLog.filter { cal.isDateInToday($0.date) && $0.onTime }.count
     }
 
     var currentTask: TaskItem? {
@@ -108,15 +121,15 @@ final class TaskStore: ObservableObject {
         scheduleSave()
     }
 
-    /// 番茄完成时由引擎调用
-    func recordFocusEnd(for taskId: UUID?) {
+    /// 番茄完成时由引擎调用（onTime=false 表示超时后腐烂收场）
+    func recordFocusEnd(for taskId: UUID?, onTime: Bool = true) {
         if let taskId = taskId, let idx = tasks.firstIndex(where: { $0.id == taskId }) {
             tasks[idx].pomosDone += 1
         }
-        focusLog.append(Date())
+        focusLog.append(FocusEntry(date: Date(), onTime: onTime))
         // 防止无限增长
         let cal = Calendar.current
-        focusLog.removeAll { cal.date(byAdding: .day, value: -60, to: Date())! > $0 }
+        focusLog.removeAll { cal.date(byAdding: .day, value: -60, to: Date())! > $0.date }
         scheduleSave()
     }
 
@@ -140,7 +153,28 @@ final class TaskStore: ObservableObject {
         var tasks: [TaskItem]
         var settings: AppSettings
         var currentTaskId: UUID?
-        var focusLog: [Date]
+        var focusLog: [FocusEntry]
+
+        init(tasks: [TaskItem], settings: AppSettings, currentTaskId: UUID?, focusLog: [FocusEntry]) {
+            self.tasks = tasks
+            self.settings = settings
+            self.currentTaskId = currentTaskId
+            self.focusLog = focusLog
+        }
+
+        // 兼容旧版 focusLog: [Date] 格式（旧记录一律视为按时完成）
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tasks = try c.decode([TaskItem].self, forKey: .tasks)
+            settings = try c.decode(AppSettings.self, forKey: .settings)
+            currentTaskId = try c.decodeIfPresent(UUID.self, forKey: .currentTaskId)
+            if let entries = try? c.decode([FocusEntry].self, forKey: .focusLog) {
+                focusLog = entries
+            } else {
+                let dates = (try? c.decode([Date].self, forKey: .focusLog)) ?? []
+                focusLog = dates.map { FocusEntry(date: $0, onTime: true) }
+            }
+        }
     }
 
     private func saveNow() {
