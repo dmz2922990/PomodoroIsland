@@ -8,6 +8,12 @@ private enum TaskTab {
     case done
 }
 
+/// 设置页分页
+private enum SettingsTab {
+    case timer
+    case general
+}
+
 /// 展开后的任务面板：主页面（计时+任务）与设置页二选一，内嵌切换
 struct PanelView: View {
 
@@ -155,38 +161,16 @@ struct PanelView: View {
 
     private var taskTabs: some View {
         HStack(spacing: 4) {
-            tabButton(.open, title: "未完成", count: openTasks.count)
-            tabButton(.done, title: "已完成", count: doneTasks.count)
+            CapsuleSegmentButton(title: "未完成", count: openTasks.count, selected: taskTab == .open) {
+                withAnimation(.easeInOut(duration: 0.15)) { taskTab = .open }
+            }
+            CapsuleSegmentButton(title: "已完成", count: doneTasks.count, selected: taskTab == .done) {
+                withAnimation(.easeInOut(duration: 0.15)) { taskTab = .done }
+            }
             Spacer()
         }
     }
 
-    private func tabButton(_ tab: TaskTab, title: String, count: Int) -> some View {
-        let selected = taskTab == tab
-        return Button {
-            withAnimation(.easeInOut(duration: 0.15)) { taskTab = tab }
-        } label: {
-            HStack(spacing: 5) {
-                Text(title)
-                Text("\(count)")
-                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(
-                        Capsule().fill(Color.white.opacity(selected ? 0.16 : 0.07))
-                    )
-            }
-            .font(.system(size: 11.5, weight: selected ? .bold : .medium))
-            .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
-            .padding(.horizontal, 10)
-            .frame(height: 24)
-            .background(
-                Capsule().fill(Color.white.opacity(selected ? 0.12 : 0.00))
-            )
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
 
     private var taskList: some View {
         ScrollView {
@@ -695,5 +679,38 @@ struct ActionButton: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// 胶囊分段按钮（任务 Tab / 设置 Tab 共用）
+private struct CapsuleSegmentButton: View {
+    let title: String
+    var count: Int?
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            HStack(spacing: 5) {
+                Text(title)
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.white.opacity(selected ? 0.16 : 0.07)))
+                }
+            }
+            .font(.system(size: 11.5, weight: selected ? .bold : .medium))
+            .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background(Capsule().fill(Color.white.opacity(selected ? 0.12 : 0.00)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: selected)
     }
 }
