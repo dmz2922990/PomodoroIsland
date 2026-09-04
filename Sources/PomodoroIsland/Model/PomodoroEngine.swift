@@ -207,8 +207,10 @@ final class PomodoroEngine: ObservableObject {
     }
 
     private func tick() {
+        // 只在计时中刷新时钟：待机时每 0.5s 触发全局刷新会导致打开的菜单闪烁
+        guard running else { return }
         now = Date()
-        guard running, let endsAt = endsAt else { return }
+        guard let endsAt = endsAt else { return }
         guard now >= endsAt else { return }
 
         if phase == .focus, overtimeStartedAt != nil {

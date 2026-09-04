@@ -244,44 +244,51 @@ struct PanelView: View {
 
             Spacer()
 
-            settingsMenu
+            SettingsMenuView()
 
             IconButton(system: "xmark.circle", help: "退出 PomodoroIsland") {
                 NSApp.terminate(nil)
             }
         }
     }
+}
 
-    private var settingsMenu: some View {
+/// 设置菜单：独立子视图，只依赖 store。
+/// 计时引擎每秒刷新会重建 PanelView，但本视图输入不变会被 SwiftUI 跳过，
+/// 从而避免打开中的 NSMenu 被反复重建导致二级菜单闪烁。
+private struct SettingsMenuView: View {
+    @EnvironmentObject private var store: TaskStore
+
+    var body: some View {
         Menu {
             Menu("专注时长") {
                 ForEach([15, 20, 25, 30, 45, 50, 60], id: \.self) { m in
                     Button("\(m) 分钟") {
-                        updateSettings { $0.focusMinutes = m }
+                        update { $0.focusMinutes = m }
                     }
                 }
             }
             Menu("小憩时长") {
                 ForEach([3, 5, 10], id: \.self) { m in
                     Button("\(m) 分钟") {
-                        updateSettings { $0.shortBreakMinutes = m }
+                        update { $0.shortBreakMinutes = m }
                     }
                 }
             }
             Menu("长休息时长") {
                 ForEach([10, 15, 20, 30], id: \.self) { m in
                     Button("\(m) 分钟") {
-                        updateSettings { $0.longBreakMinutes = m }
+                        update { $0.longBreakMinutes = m }
                     }
                 }
             }
             Toggle("结束后自动开始休息", isOn: Binding(
                 get: { store.settings.autoStartBreak },
-                set: { on in updateSettings { $0.autoStartBreak = on } }
+                set: { on in update { $0.autoStartBreak = on } }
             ))
             Toggle("提示音", isOn: Binding(
                 get: { store.settings.soundOn },
-                set: { on in updateSettings { $0.soundOn = on } }
+                set: { on in update { $0.soundOn = on } }
             ))
         } label: {
             Image(systemName: "gearshape")
@@ -296,7 +303,7 @@ struct PanelView: View {
         .help("设置")
     }
 
-    private func updateSettings(_ mutate: (inout AppSettings) -> Void) {
+    private func update(_ mutate: (inout AppSettings) -> Void) {
         var s = store.settings
         mutate(&s)
         store.updateSettings(s)
