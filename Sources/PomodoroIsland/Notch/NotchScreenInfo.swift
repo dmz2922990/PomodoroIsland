@@ -8,8 +8,8 @@ enum NotchScreenInfo {
     /// 典型 MacBook 刘海的近似尺寸（无真实刘海时使用）
     static let fallbackSize = CGSize(width: 200, height: 32)
 
-    /// 收起状态：内容显示在刘海两侧的"翅膀"里，与刘海同高
-    static let collapsedWing: CGFloat = 80
+    /// 收起状态：每侧仅预留一个图标位置
+    static let collapsedWing: CGFloat = 28
     /// 展开状态下岛屿头部的延伸高度
     static let expandedExtension: CGFloat = 56
 
