@@ -15,7 +15,10 @@ struct StatusIconView: View {
 
     var body: some View {
         Group {
-            if let img = currentImage {
+            if phase == .idle {
+                // 空闲不显示图标，占位保持布局稳定
+                Color.clear
+            } else if let img = currentImage {
                 Image(nsImage: img)
                     .resizable()
                     .interpolation(.none)
@@ -31,9 +34,7 @@ struct StatusIconView: View {
 
     private var currentImage: NSImage? {
         guard phase == .focus || isOvertime else {
-            // 空闲：未播种的土；休息：小苗
-            if phase == .idle { return IconLibrary.wait ?? IconLibrary.sprout }
-            return IconLibrary.sprout
+            return IconLibrary.sprout  // 休息：小苗（空闲不显示图标）
         }
         let frames = isOvertime ? IconLibrary.rot : IconLibrary.growth
         guard !frames.isEmpty else { return IconLibrary.sprout }
