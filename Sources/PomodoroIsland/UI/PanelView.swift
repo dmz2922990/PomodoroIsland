@@ -11,6 +11,8 @@ struct PanelView: View {
     @State private var showSettings = false
     @State private var newTaskTitle = ""
     @State private var hoveredTask: UUID?
+    @State private var confirmingQuit = false
+    @State private var quitConfirmWork: DispatchWorkItem?
 
     private var accent: Color { Theme.accent(for: engine.phase) }
 
@@ -195,7 +197,46 @@ struct PanelView: View {
             }
             .padding(.horizontal, 8)
         }
-        .frame(maxHeight: 232)
+                    .frame(maxHeight: 232)
+    }
+
+    // MARK: - 退出（两步确认，防止误触）
+
+    private var quitButton: some View {
+        Button {
+            if confirmingQuit {
+                quitConfirmWork?.cancel()
+                NSApp.terminate(nil)
+            } else {
+                confirmingQuit = true
+                let work = DispatchWorkItem { confirmingQuit = false }
+                quitConfirmWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+            }
+        } label: {
+            Group {
+                if confirmingQuit {
+                    Text("确认退出")
+                        .font(.system(size: 10.5, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 9)
+                        .frame(height: 30)
+                        .background(
+                            Capsule().fill(Color(red: 0.92, green: 0.32, blue: 0.30))
+                        )
+                } else {
+                    Image(systemName: "xmark.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("退出")
+        .animation(.easeInOut(duration: 0.15), value: confirmingQuit)
     }
 
     // MARK: - 输入区
@@ -254,9 +295,7 @@ struct PanelView: View {
                 }
             }
 
-            IconButton(system: "xmark.circle", help: "退出 PomodoroIsland") {
-                NSApp.terminate(nil)
-            }
+            quitButton
         }
     }
 }
