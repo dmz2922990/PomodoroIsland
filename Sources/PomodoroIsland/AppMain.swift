@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
     private var cancellables: [AnyCancellable] = []
+    private var mcpServer: MCPServer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -35,9 +36,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         observeEngine()
 
+        // 完成当前任务 → 自动停止专注（store 层回调，UI 与 MCP 行为一致）
+        store.onCurrentTaskCompleted = { [weak self] in self?.engine.stopIfFocused() }
+        store.onSettingsChanged = { [weak self] in self?.syncMCPServer() }
+        syncMCPServer()
+
         if ProcessInfo.processInfo.environment["POMO_SELFTEST"] == "1" {
             runSelfTest()
         }
+    }
+
+    // MARK: - MCP 服务
+
+    /// 按设置启停 MCP 服务（端口变化时自动重建）
+    private func syncMCPServer() {
+        let wanted = store.settings.mcpEnabled
+        let port = UInt16(clamping: store.settings.mcpPort)
+        if !wanted {
+            mcpServer?.stop()
+            mcpServer = nil
+            store.mcpStatusText = "已关闭"
+            return
+        }
+        if let s = mcpServer, s.port == port { return }  // 已按相同端口运行
+        mcpServer?.stop()
+        let server = MCPServer(store: store, engine: engine, port: port)
+        server.onStateChange = { [weak self] _, message in
+            self?.store.mcpStatusText = message
+        }
+        mcpServer = server
+        server.start()
     }
 
     // MARK: - 自测（POMO_SELFTEST=1）

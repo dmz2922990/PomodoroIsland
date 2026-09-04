@@ -24,6 +24,30 @@ struct AppSettings: Codable, Equatable {
     var autoStartBreak: Bool = false
     /// 提示音开关
     var soundOn: Bool = true
+    /// MCP 服务开关（供 AI 客户端增删改查任务）
+    var mcpEnabled: Bool = true
+    /// MCP 监听端口
+    var mcpPort: Int = 9527
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery
+        case autoStartBreak, soundOn, mcpEnabled, mcpPort
+    }
+
+    // 兼容旧格式：新增字段缺失时用默认值
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        focusMinutes = try c.decodeIfPresent(Int.self, forKey: .focusMinutes) ?? 25
+        shortBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .shortBreakMinutes) ?? 5
+        longBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .longBreakMinutes) ?? 15
+        longBreakEvery = try c.decodeIfPresent(Int.self, forKey: .longBreakEvery) ?? 4
+        autoStartBreak = try c.decodeIfPresent(Bool.self, forKey: .autoStartBreak) ?? false
+        soundOn = try c.decodeIfPresent(Bool.self, forKey: .soundOn) ?? true
+        mcpEnabled = try c.decodeIfPresent(Bool.self, forKey: .mcpEnabled) ?? true
+        mcpPort = try c.decodeIfPresent(Int.self, forKey: .mcpPort) ?? 9527
+    }
 }
 
 /// 一次完成番茄的记录
@@ -41,6 +65,13 @@ final class TaskStore: ObservableObject {
     @Published var currentTaskId: UUID?
     /// 每个完成番茄的记录，用于统计"今日"与轮次
     @Published private(set) var focusLog: [FocusEntry] = []
+    /// MCP 服务运行状态（设置页展示）
+    @Published var mcpStatusText: String = ""
+
+    /// 完成当前任务时的回调（自动停止专注）；由 AppDelegate 注入
+    var onCurrentTaskCompleted: (() -> Void)?
+    /// 设置变更回调（用于重启 MCP 服务等）
+    var onSettingsChanged: (() -> Void)?
 
     var todayFocusCount: Int {
         let cal = Calendar.current
@@ -70,25 +101,35 @@ final class TaskStore: ObservableObject {
     // MARK: - 任务操作
 
     /// 新任务插入到未完成列表的末尾（最上方优先级最高）
-    func addTask(title: String) {
+    @discardableResult
+    func addTask(title: String, planned: Int? = nil) -> TaskItem? {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let item = TaskItem(title: trimmed)
+        guard !trimmed.isEmpty else { return nil }
+        var item = TaskItem(title: trimmed)
+        item.pomosPlanned = planned
         let insertIndex = tasks.firstIndex(where: { $0.isDone }) ?? tasks.count
         tasks.insert(item, at: insertIndex)
         if currentTaskId == nil {
             currentTaskId = item.id
         }
         scheduleSave()
+        return item
     }
 
     /// 完成当前任务后自动切到最上方（最高优先级）的未完成任务
     func toggleDone(_ id: UUID) {
         guard let idx = tasks.firstIndex(where: { $0.id == id }) else { return }
-        tasks[idx].isDone.toggle()
-        tasks[idx].finishedAt = tasks[idx].isDone ? Date() : nil
-        if tasks[idx].isDone, tasks[idx].id == currentTaskId {
+        setDone(id, !tasks[idx].isDone)
+    }
+
+    func setDone(_ id: UUID, _ done: Bool) {
+        guard let idx = tasks.firstIndex(where: { $0.id == id }), tasks[idx].isDone != done else { return }
+        let wasCurrent = tasks[idx].id == currentTaskId
+        tasks[idx].isDone = done
+        tasks[idx].finishedAt = done ? Date() : nil
+        if done, wasCurrent {
             currentTaskId = tasks.first(where: { !$0.isDone })?.id
+            onCurrentTaskCompleted?()
         }
         scheduleSave()
     }
@@ -151,6 +192,7 @@ final class TaskStore: ObservableObject {
     func updateSettings(_ newSettings: AppSettings) {
         settings = newSettings
         scheduleSave()
+        onSettingsChanged?()
     }
 
     // MARK: - 持久化（防抖）

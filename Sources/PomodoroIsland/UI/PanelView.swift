@@ -202,14 +202,7 @@ struct PanelView: View {
                             }
                         },
                         onSelect: taskTab == .open ? { store.setCurrent(task.id) } : {},
-                        onToggle: {
-                            let wasCurrent = task.id == store.currentTaskId
-                            store.toggleDone(task.id)
-                            // 完成当前任务 → 自动停止专注（该番茄未完成，不计入）
-                            if wasCurrent, engine.phase == .focus {
-                                engine.reset()
-                            }
-                        },
+                        onToggle: { store.toggleDone(task.id) },
                         onDelete: { store.deleteTask(task.id) }
                     )
                     .opacity(draggingTaskId == task.id ? 0.45 : 1)
@@ -409,6 +402,13 @@ private struct SettingsPage: View {
                     title: "提示音",
                     isOn: store.settings.soundOn
                 ) { on in update { $0.soundOn = on } }
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.07))
+                    .frame(height: 1)
+                    .padding(.vertical, 2)
+
+                mcpSection
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -421,6 +421,63 @@ private struct SettingsPage: View {
         var s = store.settings
         mutate(&s)
         store.updateSettings(s)
+    }
+
+    // MARK: MCP 服务区
+
+    private var mcpSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Toggle("MCP 服务", isOn: Binding(
+                    get: { store.settings.mcpEnabled },
+                    set: { on in update { $0.mcpEnabled = on } }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+
+                Spacer()
+
+                Text(store.mcpStatusText.isEmpty ? " " : store.mcpStatusText)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(store.mcpStatusText == "运行中"
+                                     ? Color(red: 0.35, green: 0.78, blue: 0.44)
+                                     : Theme.textTertiary)
+            }
+
+            Text("供接入的 AI（ZCode / Claude 等）增删改查任务、读取计时状态")
+                .font(.system(size: 9.5))
+                .foregroundStyle(Theme.textTertiary)
+
+            HStack(spacing: 6) {
+                Text("http://127.0.0.1:\(store.settings.mcpPort)/mcp")
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("http://127.0.0.1:\(store.settings.mcpPort)/mcp", forType: .string)
+                } label: {
+                    Text("复制")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 20)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

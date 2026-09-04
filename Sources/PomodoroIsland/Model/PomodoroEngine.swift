@@ -178,6 +178,11 @@ final class PomodoroEngine: ObservableObject {
         pausedOvertimeSeconds = nil
     }
 
+    /// 当前任务被完成等场景：若在专注中则自动停止
+    func stopIfFocused() {
+        if phase == .focus { reset() }
+    }
+
     private func begin(duration: TimeInterval) {
         guard duration > 0 else { return }
         now = Date()  // 空闲期间时钟冻结，启动前先校准，避免首帧剩余时间偏大

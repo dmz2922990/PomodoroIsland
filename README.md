@@ -38,6 +38,20 @@ swift run
 
 任务与设置持久化在 `~/Library/Application Support/PomodoroIsland/store.json`。
 
+## MCP 服务（AI 接入）
+
+应用内嵌 MCP 服务（Streamable HTTP），接入的 AI（ZCode / Claude 等）可以直接增删改查任务、读取计时状态，界面实时同步。
+
+**接入**：设置页打开「MCP 服务」，复制地址，在 MCP 客户端配置中添加：
+
+```json
+{ "mcpServers": { "pomodoro-island": { "url": "http://127.0.0.1:9527/mcp" } } }
+```
+
+**工具**：`list_tasks`（按 open/done/all 过滤）、`add_task`（标题+计划番茄数）、`update_task`（改名/勾选/计划量）、`delete_task`、`set_current_task`、`get_status`（阶段/剩余时间/今日番茄数）。
+
+说明：仅监听本机 127.0.0.1；通过 MCP 完成当前任务同样会自动停止进行中的专注；新任务进入未完成列表末尾。
+
 ## 说明
 
 交互与视觉思路参考了开源社区"刘海岛屿"类应用（如 CodeIsland、boring.notch 等）的通用做法，代码为独立实现，未复用任何第三方代码。
