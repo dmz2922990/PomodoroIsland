@@ -1,30 +1,30 @@
 import SwiftUI
 
-/// 刘海条（岛屿本体）：顶部直角与屏幕顶/物理刘海融合，底部圆角"下巴"承载内容。
-/// 物理刘海区域本身无法显示像素，所有内容都画在刘海下方的延伸区。
+/// 刘海条（岛屿本体）：顶部直角与屏幕顶融合，高度动态对齐当前屏幕的菜单栏
+/// （刘海屏 = 物理刘海高度；外接屏 = 菜单栏高度）。收起时计时内容显示在
+/// 刘海两侧的"翅膀"里，与刘海同高；展开时头部向下延伸出 44pt 的下巴。
 struct IslandStripView: View {
 
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var controller: NotchWindowController
 
-    private var notchHeight: CGFloat {
-        NotchScreenInfo.notchSize(on: NotchScreenInfo.preferredScreen()).height
+    private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
+
+    /// 菜单栏/刘海高度带
+    private var bandHeight: CGFloat {
+        NotchScreenInfo.collapsedIslandHeight(on: screen)
     }
 
-    private var extensionHeight: CGFloat {
-        controller.isExpanded
-            ? NotchScreenInfo.expandedExtension
-            : NotchScreenInfo.collapsedExtension
+    private var totalHeight: CGFloat {
+        bandHeight + (controller.isExpanded ? NotchScreenInfo.expandedExtension : 0)
     }
-
-    private var totalHeight: CGFloat { notchHeight + extensionHeight }
 
     private var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
             topLeadingRadius: 0,
-            bottomLeadingRadius: 18,
-            bottomTrailingRadius: 18,
+            bottomLeadingRadius: controller.isExpanded ? 18 : 12,
+            bottomTrailingRadius: controller.isExpanded ? 18 : 12,
             topTrailingRadius: 0,
             style: .continuous
         )
@@ -38,11 +38,10 @@ struct IslandStripView: View {
 
             if controller.isExpanded {
                 expandedHeader
-                    .padding(.top, notchHeight + 6)
+                    .padding(.top, bandHeight + 6)
                     .transition(.opacity)
             } else {
-                collapsedContent
-                    .padding(.top, notchHeight + 2)
+                collapsedWings
                     .transition(.opacity)
             }
         }
@@ -57,26 +56,36 @@ struct IslandStripView: View {
         .animation(.easeInOut(duration: 0.2), value: controller.isExpanded)
     }
 
-    // MARK: - 收起态（内容位于刘海下方的 24pt 下巴内）
+    // MARK: - 收起态（内容位于刘海两侧翅膀，与刘海同高）
 
-    private var collapsedContent: some View {
-        HStack(spacing: 6) {
-            phaseDot
-
-            Text(engine.displayText)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-
-            if !engine.running, store.todayFocusCount > 0 {
-                Text("🍅×\(store.todayFocusCount)")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
-                    .transition(.opacity)
+    private var collapsedWings: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 6) {
+                phaseDot
+                Text(engine.displayText)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
             }
+            .frame(width: NotchScreenInfo.collapsedWing - 12, alignment: .leading)
+            .frame(maxHeight: .infinity)
+
+            // 中段是物理刘海（不可显示），留空
+            Spacer(minLength: 0)
+
+            Group {
+                if !engine.running, store.todayFocusCount > 0 {
+                    Text("🍅×\(store.todayFocusCount)")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .frame(width: NotchScreenInfo.collapsedWing - 12, alignment: .trailing)
+            .frame(maxHeight: .infinity)
         }
-        .padding(.horizontal, 12)
-        .frame(height: NotchScreenInfo.collapsedExtension - 4, alignment: .center)
+        .padding(.horizontal, 10)
+        .frame(height: bandHeight)
+        .animation(.easeInOut(duration: 0.15), value: engine.running)
     }
 
     private var phaseDot: some View {

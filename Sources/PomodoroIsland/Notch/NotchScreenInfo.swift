@@ -8,20 +8,42 @@ enum NotchScreenInfo {
     /// 典型 MacBook 刘海的近似尺寸（无真实刘海时使用）
     static let fallbackSize = CGSize(width: 200, height: 32)
 
-    /// 收起状态下刘海向下延伸的"下巴"高度（计时内容显示区，物理刘海本身无法显示像素）
-    static let collapsedExtension: CGFloat = 24
+    /// 收起状态：内容显示在刘海两侧的"翅膀"里，与刘海同高
+    static let collapsedWing: CGFloat = 80
     /// 展开状态下岛屿头部的延伸高度
     static let expandedExtension: CGFloat = 44
 
-    /// 岛屿矩形：刘海区域 + 向下延伸。屏幕坐标系（左下原点），顶边贴屏幕顶。
-    static func islandRect(on screen: NSScreen, expanded: Bool) -> NSRect {
+    /// 菜单栏高度（随屏幕与分辨率不同；自动隐藏时回退典型值）
+    static func menuBarHeight(on screen: NSScreen) -> CGFloat {
+        let h = screen.frame.maxY - screen.visibleFrame.maxY
+        return h > 0 ? h : 24
+    }
+
+    /// 物理刘海高度（无刘海屏幕返回 0）
+    static func physicalNotchHeight(on screen: NSScreen) -> CGFloat {
+        if #available(macOS 12.0, *) {
+            let top = screen.safeAreaInsets.top
+            if top > 0 { return top }
+        }
+        return 0
+    }
+
+    /// 收起岛屿的目标高度：与顶部菜单栏视觉齐平。
+    /// 刘海屏 = 刘海高度（物理刘海比菜单栏高，必须盖住）；外接屏 = 菜单栏高度。
+    static func collapsedIslandHeight(on screen: NSScreen) -> CGFloat {
+        max(physicalNotchHeight(on: screen), menuBarHeight(on: screen))
+    }
+
+    /// 收起状态岛屿矩形：刘海两侧加宽，高度动态对齐菜单栏。屏幕坐标系（左下原点），顶边贴屏幕顶。
+    static func collapsedIslandRect(on screen: NSScreen) -> NSRect {
         let strip = stripRect(on: screen)
-        let ext = expanded ? expandedExtension : collapsedExtension
+        let width = strip.width + collapsedWing * 2
+        let height = collapsedIslandHeight(on: screen)
         return NSRect(
-            x: strip.minX,
-            y: strip.minY - ext,
-            width: strip.width,
-            height: strip.height + ext
+            x: strip.midX - width / 2,
+            y: screen.frame.maxY - height,
+            width: width,
+            height: height
         )
     }
 
@@ -57,16 +79,13 @@ enum NotchScreenInfo {
                 let right = screen.auxiliaryTopRightArea?.width ?? 0
                 if left > 0, right > 0 {
                     // 屏幕总宽 - 两侧安全区 = 相机开窗宽度
-                    let width = screen.frame.width - left - right
-                    return CGSize(width: width, height: topInset)
+                    return CGSize(width: screen.frame.width - left - right, height: topInset)
                 }
                 return CGSize(width: fallbackSize.width, height: topInset)
             }
         }
-        // 无刘海：用菜单栏高度，宽度用默认值
-        let menuBar = screen.frame.maxY - screen.visibleFrame.maxY
-        let height = max(fallbackSize.height, menuBar > 0 ? menuBar : fallbackSize.height)
-        return CGSize(width: fallbackSize.width, height: height)
+        // 无刘海：宽度用默认值，高度与菜单栏一致
+        return CGSize(width: fallbackSize.width, height: menuBarHeight(on: screen))
     }
 }
 

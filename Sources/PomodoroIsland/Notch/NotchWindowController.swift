@@ -99,14 +99,14 @@ final class NotchWindowController: ObservableObject {
     private var stripRect: NSRect { NotchScreenInfo.stripRect(on: screen) }
 
     private func collapsedFrame() -> NSRect {
-        NotchScreenInfo.islandRect(on: screen, expanded: false)
+        NotchScreenInfo.collapsedIslandRect(on: screen)
     }
 
     private func expandedFrame() -> NSRect {
-        let strip = stripRect
         let width = Self.panelWidth
-        // 岛屿（刘海+头部延伸）+ 间隙 + 面板 + 底部留白
-        let height = strip.height + NotchScreenInfo.expandedExtension + 6 + Self.panelHeight + 8
+        // 岛屿（菜单栏/刘海高度 + 头部延伸）+ 间隙 + 面板 + 底部留白
+        let band = NotchScreenInfo.collapsedIslandHeight(on: screen)
+        let height = band + NotchScreenInfo.expandedExtension + 6 + Self.panelHeight + 8
         let frame = screen.frame
         return NSRect(
             x: frame.midX - width / 2,
