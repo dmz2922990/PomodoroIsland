@@ -76,23 +76,23 @@ struct ExpandedIslandView: View {
     }
 
     private var expandedHeader: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             StatusIconView(
                 phase: engine.phase,
                 progress: engine.progress,
                 isOvertime: engine.isOvertime,
                 overtimeFraction: engine.overtimeFraction,
-                size: 26
+                size: 40
             )
-            .frame(width: 30)
+            .frame(width: 44)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(store.currentTask?.title ?? "未选择任务")
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 Text("\(engine.phase.label) · 今日 \(store.todayFocusCount) 🍅")
-                    .font(.system(size: 9.5, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textTertiary)
             }
 

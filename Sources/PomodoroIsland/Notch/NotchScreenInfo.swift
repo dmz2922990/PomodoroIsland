@@ -11,7 +11,7 @@ enum NotchScreenInfo {
     /// 收起状态：内容显示在刘海两侧的"翅膀"里，与刘海同高
     static let collapsedWing: CGFloat = 80
     /// 展开状态下岛屿头部的延伸高度
-    static let expandedExtension: CGFloat = 44
+    static let expandedExtension: CGFloat = 56
 
     /// 菜单栏高度（随屏幕与分辨率不同；自动隐藏时回退典型值）
     static func menuBarHeight(on screen: NSScreen) -> CGFloat {
