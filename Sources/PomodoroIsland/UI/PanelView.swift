@@ -1,6 +1,12 @@
 import SwiftUI
 import AppKit
 
+/// 任务列表分页
+private enum TaskTab {
+    case open
+    case done
+}
+
 /// 展开后的任务面板：主页面（计时+任务）与设置页二选一，内嵌切换
 struct PanelView: View {
 
@@ -13,6 +19,7 @@ struct PanelView: View {
     @State private var hoveredTask: UUID?
     @State private var confirmingQuit = false
     @State private var quitConfirmWork: DispatchWorkItem?
+    @State private var taskTab: TaskTab = .open
 
     private var accent: Color { Theme.accent(for: engine.phase) }
 
@@ -32,8 +39,12 @@ struct PanelView: View {
 
                 divider
 
+                taskTabs
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+
                 taskList
-                    .padding(.vertical, 8)
+                    .padding(.top, 6)
 
                 addTaskField
                     .padding(.horizontal, 16)
@@ -136,68 +147,93 @@ struct PanelView: View {
 
     private var openTasks: [TaskItem] { store.tasks.filter { !$0.isDone } }
     private var doneTasks: [TaskItem] { store.tasks.filter { $0.isDone } }
+    private var visibleTasks: [TaskItem] { taskTab == .open ? openTasks : doneTasks }
+
+    // MARK: - 任务分页
+
+    private var taskTabs: some View {
+        HStack(spacing: 4) {
+            tabButton(.open, title: "未完成", count: openTasks.count)
+            tabButton(.done, title: "已完成", count: doneTasks.count)
+            Spacer()
+        }
+    }
+
+    private func tabButton(_ tab: TaskTab, title: String, count: Int) -> some View {
+        let selected = taskTab == tab
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { taskTab = tab }
+        } label: {
+            HStack(spacing: 5) {
+                Text(title)
+                Text("\(count)")
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule().fill(Color.white.opacity(selected ? 0.16 : 0.07))
+                    )
+            }
+            .font(.system(size: 11.5, weight: selected ? .bold : .medium))
+            .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background(
+                Capsule().fill(Color.white.opacity(selected ? 0.12 : 0.00))
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
 
     private var taskList: some View {
         ScrollView {
             VStack(spacing: 2) {
-                ForEach(openTasks) { task in
+                ForEach(visibleTasks) { task in
                     TaskRow(
                         task: task,
-                        isCurrent: task.id == store.currentTaskId,
+                        isCurrent: taskTab == .open && task.id == store.currentTaskId,
                         isHovered: hoveredTask == task.id,
                         onHover: { hovering in
                             withAnimation(.easeInOut(duration: 0.12)) {
                                 hoveredTask = hovering ? task.id : nil
                             }
                         },
-                        onSelect: { store.setCurrent(task.id) },
+                        onSelect: taskTab == .open ? { store.setCurrent(task.id) } : {},
                         onToggle: { store.toggleDone(task.id) },
                         onDelete: { store.deleteTask(task.id) }
                     )
                 }
 
-                if doneTasks.isEmpty == false {
-                    HStack {
-                        Text("已完成 \(doneTasks.count)")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Theme.textTertiary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 6)
-
-                    ForEach(doneTasks) { task in
-                        TaskRow(
-                            task: task,
-                            isCurrent: false,
-                            isHovered: hoveredTask == task.id,
-                            onHover: { hovering in
-                                withAnimation(.easeInOut(duration: 0.12)) {
-                                    hoveredTask = hovering ? task.id : nil
-                                }
-                            },
-                            onSelect: {},
-                            onToggle: { store.toggleDone(task.id) },
-                            onDelete: { store.deleteTask(task.id) }
-                        )
-                    }
-                }
-
-                if store.tasks.isEmpty {
-                    VStack(spacing: 6) {
-                        Image(systemName: "list.clipboard")
-                            .font(.system(size: 22))
-                            .foregroundStyle(Theme.textTertiary)
-                        Text("还没有任务，先加一个吧")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.textTertiary)
-                    }
-                    .padding(.vertical, 18)
-                }
+                emptyState
             }
             .padding(.horizontal, 8)
         }
-                    .frame(maxHeight: 232)
+        .frame(maxHeight: 232)
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if store.tasks.isEmpty {
+            emptyPlaceholder(icon: "list.clipboard", text: "还没有任务，先加一个吧")
+        } else if taskTab == .open && openTasks.isEmpty {
+            emptyPlaceholder(icon: "checkmark.seal", text: "都完成啦，休息一下 🎉")
+        } else if taskTab == .done && doneTasks.isEmpty {
+            emptyPlaceholder(icon: "tray", text: "还没有已完成的任务")
+        }
+    }
+
+    private func emptyPlaceholder(icon: String, text: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 22))
+                .foregroundStyle(Theme.textTertiary)
+            Text(text)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 退出（两步确认，防止误触）
