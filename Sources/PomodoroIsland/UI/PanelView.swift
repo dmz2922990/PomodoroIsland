@@ -423,23 +423,27 @@ private struct SettingsPage: View {
 
     private var mcpSection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // 与 SettingToggleRow 同构：标题（+状态）居左，开关贴最右
             HStack {
-                Toggle("MCP 服务", isOn: Binding(
-                    get: { store.settings.mcpEnabled },
-                    set: { on in update { $0.mcpEnabled = on } }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
-
-                Spacer()
+                Text("MCP 服务")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
 
                 Text(store.mcpStatusText.isEmpty ? " " : store.mcpStatusText)
                     .font(.system(size: 9.5))
                     .foregroundStyle(store.mcpStatusText == "运行中"
                                      ? Color(red: 0.35, green: 0.78, blue: 0.44)
                                      : Theme.textTertiary)
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { store.settings.mcpEnabled },
+                    set: { on in update { $0.mcpEnabled = on } }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
             }
 
             Text("供接入的 AI（ZCode / Claude 等）增删改查任务、读取计时状态")
@@ -447,7 +451,7 @@ private struct SettingsPage: View {
                 .foregroundStyle(Theme.textTertiary)
 
             HStack(spacing: 6) {
-                Text("http://127.0.0.1:\(store.settings.mcpPort)/mcp")
+                Text("http://127.0.0.1:\(String(store.settings.mcpPort))/mcp")
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
