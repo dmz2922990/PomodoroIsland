@@ -392,6 +392,16 @@ private struct SettingsPage: View {
                 } else {
                     VStack(spacing: 14) {
                         SettingToggleRow(
+                            title: "通知服务（AI 发通知/提问）",
+                            isOn: store.settings.notifyEnabled
+                        ) { on in update { $0.notifyEnabled = on } }
+
+                        SettingToggleRow(
+                            title: "通知到达时自动弹出",
+                            isOn: store.settings.notifyAutoExpand
+                        ) { on in update { $0.notifyAutoExpand = on } }
+
+                        SettingToggleRow(
                             title: "提示音",
                             isOn: store.settings.soundOn
                         ) { on in update { $0.soundOn = on } }

@@ -48,7 +48,12 @@ swift run
 { "mcpServers": { "pomodoro-island": { "url": "http://127.0.0.1:9527/mcp" } } }
 ```
 
-**工具**：`list_tasks`（按 open/done/all 过滤）、`add_task`（标题+计划番茄数）、`update_task`（改名/勾选/计划量）、`delete_task`、`set_current_task`、`get_status`（阶段/剩余时间/今日番茄数）。
+**工具**：
+
+- 任务域：`list_tasks`（按 open/done/all 过滤）、`add_task`（标题+计划番茄数）、`update_task`（改名/勾选/计划量）、`delete_task`、`set_current_task`、`get_status`（阶段/剩余时间/今日番茄数）
+- 通知域：`notify`（被动通知，岛屿自动弹出、自动消失）、`ask_user`（**阻塞式提问**：按钮 / 单选多选 / 文本输入，用户在岛屿上操作后返回结果，超时可设）、`list_notifications`（队列诊断）
+
+**通知示例**：AI 调用 `ask_user` → 岛屿自动弹出选项卡片 → 你点了某个选项 → AI 收到 `{"status":"answered","selected":["休息一下"]}`。来源识别：初始化握手 `clientInfo.name` 或调用参数 `source`，卡片带来源徽标；单来源最多 2 条待响应、全局最多 3 条。
 
 说明：仅监听本机 127.0.0.1；通过 MCP 完成当前任务同样会自动停止进行中的专注；新任务进入未完成列表末尾。
 

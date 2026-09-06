@@ -28,12 +28,17 @@ struct AppSettings: Codable, Equatable {
     var mcpEnabled: Bool = true
     /// MCP 监听端口
     var mcpPort: Int = 9527
+    /// 通知服务开关（供 AI 发通知/提问，岛屿展示并可交互）
+    var notifyEnabled: Bool = true
+    /// 通知到达时自动弹出岛屿
+    var notifyAutoExpand: Bool = true
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
         case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery
         case autoStartBreak, soundOn, mcpEnabled, mcpPort
+        case notifyEnabled, notifyAutoExpand
     }
 
     // 兼容旧格式：新增字段缺失时用默认值
@@ -47,6 +52,8 @@ struct AppSettings: Codable, Equatable {
         soundOn = try c.decodeIfPresent(Bool.self, forKey: .soundOn) ?? true
         mcpEnabled = try c.decodeIfPresent(Bool.self, forKey: .mcpEnabled) ?? true
         mcpPort = try c.decodeIfPresent(Int.self, forKey: .mcpPort) ?? 9527
+        notifyEnabled = try c.decodeIfPresent(Bool.self, forKey: .notifyEnabled) ?? true
+        notifyAutoExpand = try c.decodeIfPresent(Bool.self, forKey: .notifyAutoExpand) ?? true
     }
 }
 

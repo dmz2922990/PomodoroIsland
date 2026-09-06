@@ -8,19 +8,24 @@ final class MCPServer {
 
     private let store: TaskStore
     private let engine: PomodoroEngine
+    private let notifications: NotificationStore
     let port: UInt16
 
     private var listener: NWListener?
-    private let queue = DispatchQueue(label: "pomodoro-island.mcp")
+    /// 并发队列：ask_user 会阻塞线程等待用户响应，串行会卡住其他 MCP 请求
+    private let queue = DispatchQueue(label: "pomodoro-island.mcp", attributes: .concurrent)
+    /// MCP 会话表：sessionId → 来源默认身份（clientInfo.name），主线程读写
+    private var sessions: [String: String] = [:]
     private(set) var isRunning = false
     /// (是否运行中, 说明/错误信息)
     var onStateChange: ((Bool, String) -> Void)?
 
     private let iso = ISO8601DateFormatter()
 
-    init(store: TaskStore, engine: PomodoroEngine, port: UInt16) {
+    init(store: TaskStore, engine: PomodoroEngine, notifications: NotificationStore, port: UInt16) {
         self.store = store
         self.engine = engine
+        self.notifications = notifications
         self.port = port
     }
 
@@ -94,23 +99,27 @@ final class MCPServer {
         })
     }
 
-    static func parseRequest(_ raw: Data) -> (method: String, path: String, body: Data)? {
+    static func parseRequest(_ raw: Data) -> (method: String, path: String, headers: [String: String], body: Data)? {
         guard let headerEnd = raw.range(of: Data("\r\n\r\n".utf8)) else { return nil }
         guard let head = String(data: raw[..<headerEnd.lowerBound], encoding: .utf8) else { return nil }
         var lines = head.components(separatedBy: "\r\n")
         let parts = lines.removeFirst().split(separator: " ").map(String.init)
         guard parts.count >= 2 else { return nil }
+        var headers: [String: String] = [:]
         var contentLength = 0
-        for line in lines where line.lowercased().hasPrefix("content-length:") {
-            contentLength = Int(line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)) ?? 0
+        for line in lines {
+            let kv = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard kv.count == 2 else { continue }
+            headers[kv[0].lowercased()] = kv[1]
+            if kv[0].lowercased() == "content-length" { contentLength = Int(kv[1]) ?? 0 }
         }
         let bodyData = raw[headerEnd.upperBound...]
         guard bodyData.count >= contentLength else { return nil }
         let path = parts[1].split(separator: "?").first.map(String.init) ?? parts[1]
-        return (parts[0], path, Data(bodyData.prefix(contentLength)))
+        return (parts[0], path, headers, Data(bodyData.prefix(contentLength)))
     }
 
-    private func handle(_ req: (method: String, path: String, body: Data)) -> Data {
+    private func handle(_ req: (method: String, path: String, headers: [String: String], body: Data)) -> Data {
         guard req.path == "/mcp" else {
             return httpResponse(status: 404, body: rpcError(id: NSNull(), code: -32601, message: "not found"))
         }
@@ -124,33 +133,41 @@ final class MCPServer {
         guard obj["id"] != nil else {
             return httpResponse(status: 202, body: Data())
         }
-        return httpResponse(status: 200, body: handleRPCMessage(obj))
+        let (body, extraHeaders) = handleRPCMessage(obj, headers: req.headers)
+        return httpResponse(status: 200, body: body, extraHeaders: extraHeaders)
     }
 
-    private func httpResponse(status: Int, body: Data) -> Data {
+    private func httpResponse(status: Int, body: Data, extraHeaders: [String: String] = [:]) -> Data {
         let reason = ["200 OK", "202 Accepted", "400 Bad Request", "404 Not Found", "405 Method Not Allowed"][
             status == 200 ? 0 : status == 202 ? 1 : status == 400 ? 2 : status == 404 ? 3 : 4
         ]
         var head = "HTTP/1.1 \(status) \(reason)\r\n"
         head += "Content-Type: application/json\r\n"
         head += "Content-Length: \(body.count)\r\n"
+        for (k, v) in extraHeaders { head += "\(k): \(v)\r\n" }
         head += "Connection: close\r\n\r\n"
         return Data(head.utf8) + body
     }
 
     // MARK: - JSON-RPC
 
-    private func handleRPCMessage(_ obj: [String: Any]) -> Data {
+    private func handleRPCMessage(_ obj: [String: Any], headers: [String: String]) -> (Data, [String: String]) {
         let method = obj["method"] as? String ?? ""
         let params = obj["params"] as? [String: Any] ?? [:]
 
         var response: [String: Any] = ["jsonrpc": "2.0", "id": obj["id"] ?? NSNull()]
+        var extraHeaders: [String: String] = [:]
         switch method {
         case "initialize":
+            // 会话表：记录来源默认身份并下发会话 id
+            let sessionId = UUID().uuidString
+            let clientName = (params["clientInfo"] as? [String: Any])?["name"] as? String ?? "未署名 Agent"
+            onMain { self.sessions[sessionId] = clientName }
+            extraHeaders["MCP-Session-Id"] = sessionId
             response["result"] = [
                 "protocolVersion": "2025-06-18",
                 "capabilities": ["tools": [String: Any]()],
-                "serverInfo": ["name": "pomodoro-island", "version": "1.1.0"],
+                "serverInfo": ["name": "pomodoro-island", "version": "1.2.0"],
             ]
         case "ping":
             response["result"] = [String: Any]()
@@ -159,18 +176,25 @@ final class MCPServer {
         case "tools/call":
             let name = params["name"] as? String ?? ""
             let args = params["arguments"] as? [String: Any] ?? [:]
-            response["result"] = callTool(name, args)
+            // 来源解析：调用级 source > 会话默认身份 > 未署名
+            let sessionSource: String? = {
+                guard let sid = headers["mcp-session-id"] else { return nil }
+                return onMain { self.sessions[sid] }
+            }()
+            let source = (args["source"] as? String) ?? sessionSource ?? "未署名 Agent"
+            response["result"] = callTool(name, args, source: source)
         default:
             response["error"] = ["code": -32601, "message": "method not found: \(method)"]
         }
-        return (try? JSONSerialization.data(withJSONObject: response)) ?? Data("{}".utf8)
+        let data = (try? JSONSerialization.data(withJSONObject: response)) ?? Data("{}".utf8)
+        return (data, extraHeaders)
     }
 
     // MARK: - 工具
 
     private struct ToolError: Error { let message: String }
 
-    private func callTool(_ name: String, _ args: [String: Any]) -> Any {
+    private func callTool(_ name: String, _ args: [String: Any], source: String) -> Any {
         let result: Result<Any, ToolError>
         switch name {
         case "list_tasks": result = toolListTasks(args)
@@ -179,6 +203,9 @@ final class MCPServer {
         case "delete_task": result = toolDeleteTask(args)
         case "set_current_task": result = toolSetCurrent(args)
         case "get_status": result = toolGetStatus()
+        case "list_notifications": result = toolListNotifications()
+        case "notify": result = toolNotify(args, source: source)
+        case "ask_user": result = toolAskUser(args, source: source)
         default: result = .failure(ToolError(message: "未知工具: \(name)"))
         }
         switch result {
@@ -279,6 +306,157 @@ final class MCPServer {
         return .success(payload)
     }
 
+    /// 通知队列诊断：待响应 / 历史（状态与来源）
+    private func toolListNotifications() -> Result<Any, ToolError> {
+        let payload: [String: Any] = onMain { [self] in
+            func brief(_ n: IslandNotification) -> [String: Any] {
+                var d: [String: Any] = [
+                    "id": n.id.uuidString, "source": n.source, "kind": n.kind.rawValue,
+                    "title": n.title, "state": n.response?.status ?? "pending",
+                ]
+                if let r = n.response {
+                    if let c = r.clicked { d["clicked"] = c }
+                    if !r.selected.isEmpty { d["selected"] = r.selected }
+                    if let t = r.text { d["text"] = t }
+                }
+                return d
+            }
+            return [
+                "pending": notifications.pending.map(brief),
+                "history": Array(notifications.history.prefix(10)).map(brief),
+            ]
+        }
+        return .success(payload)
+    }
+
+    // MARK: 通知工具
+
+    /// 通知服务开关校验
+    private func checkNotifyEnabled() -> ToolError? {
+        guard store.settings.notifyEnabled else {
+            return ToolError(message: "通知服务已在设置中关闭")
+        }
+        return nil
+    }
+
+    /// 被动通知：发出即返回，自动消失
+    private func toolNotify(_ args: [String: Any], source: String) -> Result<Any, ToolError> {
+        if let e = checkNotifyEnabled() { return .failure(e) }
+        guard let title = args["title"] as? String, !title.isEmpty else {
+            return .failure(ToolError(message: "缺少 title"))
+        }
+        let level = args["level"] as? String ?? "info"
+        guard let kind = NotificationKind(rawValue: level), !kind.isInteractive else {
+            return .failure(ToolError(message: "level 须为 info / success / warning / error"))
+        }
+        let message = args["message"] as? String ?? ""
+        let autoDismiss = args["autoDismiss"] as? Int ?? 8
+
+        let n = IslandNotification(
+            source: source, kind: kind, title: title, message: message,
+            autoDismissAfter: TimeInterval(clamp(autoDismiss, 2, 300))
+        )
+        let payload: Result<Any, ToolError>? = onMain { [self] in
+            switch notifications.submit(n) {
+            case .success(let submitted):
+                return .success(["id": submitted.id.uuidString, "source": source,
+                                 "autoDismiss": clamp(autoDismiss, 2, 300)])
+            case .failure(let e):
+                return .failure(ToolError(message: e.message))
+            }
+        }
+        return payload ?? .failure(ToolError(message: "提交失败"))
+    }
+
+    /// 阻塞交互：等用户在岛屿上操作完（或超时）才返回
+    private func toolAskUser(_ args: [String: Any], source: String) -> Result<Any, ToolError> {
+        if let e = checkNotifyEnabled() { return .failure(e) }
+        guard let title = args["title"] as? String, !title.isEmpty else {
+            return .failure(ToolError(message: "缺少 title"))
+        }
+        let type = args["type"] as? String ?? "choice"
+        guard let kind = NotificationKind(rawValue: type), kind.isInteractive else {
+            return .failure(ToolError(message: "type 须为 buttons / choice / input"))
+        }
+        let message = args["message"] as? String ?? ""
+        let multiSelect = args["multiSelect"] as? Bool ?? false
+        let timeout = clamp(args["timeoutSeconds"] as? Int ?? 120, 5, 600)
+
+        var n = IslandNotification(
+            source: source, kind: kind, title: title, message: message,
+            timeoutSeconds: TimeInterval(timeout)
+        )
+        switch kind {
+        case .buttons:
+            let labels = parseStringArray(args["buttons"])
+            guard (2...4).contains(labels.count) else {
+                return .failure(ToolError(message: "buttons 需要 2-4 个按钮"))
+            }
+            n.buttons = labels.map { NotificationOption(id: $0, label: $0) }
+        case .choice:
+            let raw = (args["options"] as? [[String: Any]]) ?? []
+            guard (2...6).contains(raw.count) else {
+                return .failure(ToolError(message: "options 需要 2-6 个选项 {label, detail?}"))
+            }
+            n.options = raw.enumerated().map { i, o in
+                let label = o["label"] as? String ?? "选项\(i + 1)"
+                return NotificationOption(id: "\(i)", label: label, detail: o["detail"] as? String ?? "")
+            }
+            n.multiSelect = multiSelect
+        case .input:
+            n.inputPlaceholder = args["placeholder"] as? String ?? "输入内容…"
+        default:
+            return .failure(ToolError(message: "type 须为 buttons / choice / input"))
+        }
+
+        let box = ResponseBox()
+        let registered: Result<Void, ToolError>? = onMain { [self] in
+            switch notifications.submit(n) {
+            case .success(let submitted):
+                notifications.registerCompletion(submitted.id) { resp in
+                    box.response = resp
+                    box.sem.signal()
+                }
+                return .success(())
+            case .failure(let e):
+                return .failure(ToolError(message: e.message))
+            }
+        }
+        switch registered {
+        case .failure(let e): return .failure(e)
+        default: break
+        }
+
+        // 阻塞等待用户操作；超时兜底由 store 的 deadline 定时器结算
+        if box.sem.wait(timeout: .now() + .seconds(timeout + 2)) == .timedOut {
+            onMain { [self] in notifications.respond(n.id, NotificationResponse(status: "timeout")) }
+            _ = box.sem.wait(timeout: .now() + 2)
+        }
+        let resp = box.response ?? NotificationResponse(status: "timeout")
+
+        var payload: [String: Any] = ["status": resp.status, "source": source]
+        if let clicked = resp.clicked { payload["clicked"] = clicked }
+        if !resp.selected.isEmpty { payload["selected"] = resp.selected }
+        if let text = resp.text { payload["text"] = text }
+        return .success(payload)
+    }
+
+    private func parseStringArray(_ value: Any?) -> [String] {
+        if let arr = value as? [String] { return arr }
+        if let arr = value as? [[String: Any]] {
+            return arr.enumerated().map { i, d in d["label"] as? String ?? "选项\(i + 1)" }
+        }
+        return []
+    }
+
+    private func clamp(_ v: Int, _ lo: Int, _ hi: Int) -> Int { min(hi, max(lo, v)) }
+
+    /// ask_user 的响应容器
+    private final class ResponseBox {
+        let sem = DispatchSemaphore(value: 0)
+        var response: NotificationResponse?
+    }
+
     // MARK: - 工具描述（JSON Schema）
 
     private static let taskObjectSchema: [String: Any] = [
@@ -353,6 +531,45 @@ final class MCPServer {
             "name": "get_status",
             "description": "读取专注计时状态：阶段、剩余时间、今日番茄数、当前任务",
             "inputSchema": ["type": "object", "properties": [String: Any]()],
+        ],
+        [
+            "name": "list_notifications",
+            "description": "【通知域】查看通知队列状态：待响应列表与最近历史（诊断用）",
+            "inputSchema": ["type": "object", "properties": [String: Any]()],
+        ],
+        [
+            "name": "notify",
+            "description": "【通知域】向用户发送被动通知（岛屿自动弹出，自动消失），立即返回，不等待用户",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "title": ["type": "string", "description": "通知标题"],
+                    "message": ["type": "string", "description": "通知正文"],
+                    "level": ["type": "string", "enum": ["info", "success", "warning", "error"], "description": "通知级别，默认 info"],
+                    "autoDismiss": ["type": "integer", "description": "自动消失秒数，默认 8，范围 2-300"],
+                    "source": ["type": "string", "description": "来源身份（Agent 名），用于界面区分，默认取会话身份"],
+                ],
+                "required": ["title"],
+            ],
+        ],
+        [
+            "name": "ask_user",
+            "description": "【通知域·阻塞】向用户提问并等待其在岛屿上操作：按钮/单选多选/文本输入。调用会阻塞直到用户响应或超时。注意：任务管理请使用任务域工具，不要用本工具",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "title": ["type": "string", "description": "问题标题"],
+                    "message": ["type": "string", "description": "补充说明"],
+                    "type": ["type": "string", "enum": ["buttons", "choice", "input"], "description": "交互类型"],
+                    "buttons": ["type": "array", "items": ["type": "string"], "description": "type=buttons 时的 2-4 个按钮文案"],
+                    "options": ["type": "array", "items": ["type": "object", "properties": ["label": ["type": "string"], "detail": ["type": "string"]], "required": ["label"]], "description": "type=choice 时的 2-6 个选项"],
+                    "multiSelect": ["type": "boolean", "description": "choice 是否可多选，默认 false"],
+                    "placeholder": ["type": "string", "description": "type=input 的占位文本"],
+                    "timeoutSeconds": ["type": "integer", "description": "等待响应秒数，默认 120，范围 5-600；超时返回 status=timeout"],
+                    "source": ["type": "string", "description": "来源身份（Agent 名）"],
+                ],
+                "required": ["title", "type"],
+            ],
         ],
     ]
 

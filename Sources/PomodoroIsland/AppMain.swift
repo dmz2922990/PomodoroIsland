@@ -14,6 +14,7 @@ struct PomodoroIslandApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let store = TaskStore()
+    private let notifications = NotificationStore()
     private lazy var engine = PomodoroEngine(store: store)
     private lazy var controller = NotchWindowController()
 
@@ -29,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = NotchRootView()
             .environmentObject(store)
             .environmentObject(engine)
+            .environmentObject(notifications)
             .environmentObject(controller)
 
         controller.start(rootView: root)
@@ -39,6 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 完成当前任务 → 自动停止专注（store 层回调，UI 与 MCP 行为一致）
         store.onCurrentTaskCompleted = { [weak self] in self?.engine.stopIfFocused() }
         store.onSettingsChanged = { [weak self] in self?.syncMCPServer() }
+        // 通知到达 → 自动展开岛屿
+        notifications.onArrival = { [weak self] in
+            if self?.store.settings.notifyAutoExpand == true {
+                self?.controller.expand()
+            }
+        }
+        notifications.soundOn = store.settings.soundOn
         syncMCPServer()
 
         if ProcessInfo.processInfo.environment["POMO_SELFTEST"] == "1" {
@@ -60,12 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let s = mcpServer, s.port == port { return }  // 已按相同端口运行
         mcpServer?.stop()
-        let server = MCPServer(store: store, engine: engine, port: port)
+        let server = MCPServer(store: store, engine: engine, notifications: notifications, port: port)
         server.onStateChange = { [weak self] _, message in
             self?.store.mcpStatusText = message
         }
         mcpServer = server
         server.start()
+        notifications.soundOn = store.settings.soundOn
     }
 
     // MARK: - 自测（POMO_SELFTEST=1）
@@ -116,6 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     pass("store-persist", FileManager.default.fileExists(atPath: url.path), url.path)
 
                                     self.engine.reset()
+
+                                    // 6. 通知闭环
+                                    self.selfTestNotification(pass)
+
                                     NSLog("SELFTEST DONE")
                                     NSApp.terminate(nil)
                                 }
@@ -125,6 +139,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    /// 通知闭环：提交 → 模拟用户点击 → 回调收到响应
+    private func selfTestNotification(_ pass: (String, Bool, String) -> Void) {
+        var n = IslandNotification(
+            source: "selftest", kind: .buttons,
+            title: "自测通知", message: "m",
+            buttons: [NotificationOption(id: "ok", label: "OK")]
+        )
+        n.timeoutSeconds = 30
+        var resp: NotificationResponse?
+        switch notifications.submit(n) {
+        case .failure(let e):
+            pass("notify-response", false, e.message)
+        case .success(let submitted):
+            notifications.registerCompletion(submitted.id) { r in
+                resp = r
+            }
+            notifications.respond(submitted.id, NotificationResponse(status: "answered", clicked: "OK"))
+            pass("notify-response", resp?.status == "answered" && resp?.clicked == "OK",
+                 "\(resp?.status ?? "?") \(resp?.clicked ?? "?")")
+        }
+        _ = n
     }
 
     func applicationWillTerminate(_ notification: Notification) {
