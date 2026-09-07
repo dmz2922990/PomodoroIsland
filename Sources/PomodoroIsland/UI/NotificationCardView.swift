@@ -38,14 +38,22 @@ struct NotificationCardView: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.cardColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(kind.color.opacity(0.55), lineWidth: 1)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 14, bottomLeadingRadius: 20,
+                bottomTrailingRadius: 20, topTrailingRadius: 14,
+                style: .continuous
+            )
+            .fill(Theme.islandColor)
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 14, bottomLeadingRadius: 20,
+                    bottomTrailingRadius: 20, topTrailingRadius: 14,
+                    style: .continuous
                 )
+                .strokeBorder(Theme.cardBorder, lineWidth: 0.5)
+            )
         )
-        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+        .shadow(color: .black.opacity(0.3), radius: 10, y: 3)
     }
 
     // MARK: - 头部（来源徽标 + 类型 + 忽略）
