@@ -131,6 +131,8 @@ final class NotchWindowController: ObservableObject {
     var peekCondition: (() -> Bool)?
     /// 悬停预览态：主岛向下垂降一行显示当前任务
     @Published private(set) var isPeeking = false
+    /// 用户在通知岛点击后切换到任务面板（直至全部结算或新通知到达）
+    @Published var taskPanelOverride = false
     /// 通知内容实测高度（由视图上报）
     private var notificationContentHeight: CGFloat = 300
 
@@ -174,10 +176,21 @@ final class NotchWindowController: ObservableObject {
         peekCondition?() == true
     }
 
+    /// 是否处于通知岛形态
+    private func showingNotificationIsland() -> Bool {
+        hasPendingNotifications?() == true && !taskPanelOverride
+    }
+
+    /// 通知岛点击：切换到任务面板
+    func requestTaskPanel() {
+        taskPanelOverride = true
+        if isExpanded { applyFrame() }
+    }
+
     /// 当前状态对应的窗口 frame
     private func currentFrame() -> NSRect {
         if isExpanded {
-            return hasPendingNotifications?() == true ? notificationFrame() : expandedFrame()
+            return showingNotificationIsland() ? notificationFrame() : expandedFrame()
         }
         // 收起与预览共用固定高度窗口（预留行透明），杜绝 resize 位移
         return peekReadyFrame()
@@ -261,8 +274,9 @@ final class NotchWindowController: ObservableObject {
         }
     }
 
-    /// 通知全部结算：一律直接收起刘海条（主动点关闭也一样）
+    /// 通知全部结算：清覆盖态并直接收起刘海条（主动点关闭也一样）
     func settleAfterNotifications() {
+        taskPanelOverride = false
         guard isExpanded else { return }
         collapse()
     }
