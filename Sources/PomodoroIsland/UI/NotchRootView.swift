@@ -33,6 +33,7 @@ struct ExpandedIslandView: View {
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var notifications: NotificationStore
 
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
 
@@ -70,7 +71,12 @@ struct ExpandedIslandView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { controller.collapse() }
 
-                PanelView()
+                if let n = notifications.current {
+                    NotificationCardView(notification: n, store: notifications)
+                        .transition(.opacity)
+                } else {
+                    PanelView()
+                }
             }
         }
         .frame(width: NotchWindowController.panelWidth, height: totalHeight)

@@ -36,23 +36,9 @@ struct NotificationCardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(14)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 10, bottomLeadingRadius: 20,
-                bottomTrailingRadius: 20, topTrailingRadius: 10,
-                style: .continuous
-            )
-            .fill(Theme.islandColor)
-            .overlay(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 10, bottomLeadingRadius: 20,
-                    bottomTrailingRadius: 20, topTrailingRadius: 10,
-                    style: .continuous
-                )
-                .strokeBorder(Theme.cardBorder, lineWidth: 0.5)
-            )
-        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - 头部（来源徽标 + 类型 + 忽略）
