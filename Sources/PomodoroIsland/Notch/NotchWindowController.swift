@@ -148,8 +148,9 @@ final class NotchWindowController: ObservableObject {
 
     private var peekRowHeight: CGFloat { 26 }
 
-    /// 预览态 frame：主岛向下垂降一行
-    private func peekFrame() -> NSRect {
+    /// 收起与预览共用固定 frame：下方预留一行的空间（透明不可见），
+    /// 避免 peek 开合时窗口 resize 与内容动画错位造成整体下移
+    private func peekReadyFrame() -> NSRect {
         let base = collapsedIslandRect()
         return NSRect(x: base.minX, y: base.minY - peekRowHeight,
                       width: base.width, height: base.height + peekRowHeight)
@@ -178,8 +179,8 @@ final class NotchWindowController: ObservableObject {
         if isExpanded {
             return hasPendingNotifications?() == true ? notificationFrame() : expandedFrame()
         }
-        if isPeeking { return peekFrame() }
-        return collapsedIslandRect()
+        // 收起与预览共用固定高度窗口（预留行透明），杜绝 resize 位移
+        return peekReadyFrame()
     }
 
     private func applyFrame() {
@@ -250,7 +251,7 @@ final class NotchWindowController: ObservableObject {
             // 收起态：专注中悬停主岛 → 垂降一行预览任务；移出或条件解除 → 收回
             dwellWork?.cancel()
             if isPeeking {
-                if !shouldAutoPeek() || !NSPointInRect(point, peekFrame().insetBy(dx: -4, dy: -4)) {
+                if !shouldAutoPeek() || !NSPointInRect(point, peekReadyFrame().insetBy(dx: -4, dy: -4)) {
                     closePeek()
                 }
             } else if shouldAutoPeek(),
