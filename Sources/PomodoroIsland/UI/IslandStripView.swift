@@ -98,8 +98,8 @@ struct IslandStripView: View {
 
     // MARK: - 计时环状态
 
-    /// 专注进行中的当天轮次（按按时完成的番茄数；超时的不计轮）
-    private var focusRound: Int { store.todayOnTimeCount + 1 }
+    /// 专注进行中的当天轮次（今日完成的番茄都推进轮次，含超时）
+    private var focusRound: Int { store.todayFocusCount + 1 }
 
     private var ringColor: Color {
         if engine.isOvertime {
