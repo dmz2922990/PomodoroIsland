@@ -3,6 +3,11 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// 任务列表分页
+/// 面板页面
+private enum PanelPage {
+    case main, settings, notifications
+}
+
 private enum TaskTab {
     case open
     case done
@@ -20,8 +25,9 @@ struct PanelView: View {
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
     @EnvironmentObject private var controller: NotchWindowController
+    @EnvironmentObject private var notifications: NotificationStore
 
-    @State private var showSettings = false
+    @State private var page: PanelPage = .main
     @State private var newTaskTitle = ""
     @State private var hoveredTask: UUID?
     @State private var confirmingQuit = false
@@ -33,8 +39,11 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showSettings {
+            if page == .settings {
                 SettingsPage()
+                    .transition(.opacity)
+            } else if page == .notifications {
+                NotificationHistoryPage()
                     .transition(.opacity)
             } else {
                 timerSection
@@ -65,7 +74,7 @@ struct PanelView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
         }
-        .animation(.easeInOut(duration: 0.15), value: showSettings)
+        .animation(.easeInOut(duration: 0.15), value: page)
         .frame(width: NotchWindowController.panelWidth,
                height: NotchWindowController.panelHeight,
                alignment: .top)
@@ -320,11 +329,25 @@ struct PanelView: View {
             Spacer()
 
             IconButton(
-                system: showSettings ? "gearshape.fill" : "gearshape",
-                help: showSettings ? "返回" : "设置"
+                system: page == .settings ? "gearshape.fill" : "gearshape",
+                help: page == .settings ? "返回" : "设置"
             ) {
                 withAnimation(.easeInOut(duration: 0.15)) {
-                    showSettings.toggle()
+                    page = page == .settings ? .main : .settings
+                }
+            }
+
+            ZStack(alignment: .topTrailing) {
+                IconButton(
+                    system: page == .notifications ? "bell.fill" : "bell",
+                    help: page == .notifications ? "返回" : "通知"
+                ) {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        page = page == .notifications ? .main : .notifications
+                    }
+                }
+                if !notifications.pending.isEmpty {
+                    Circle().fill(Color.red).frame(width: 6, height: 6).offset(x: 2, y: 1)
                 }
             }
 
@@ -738,5 +761,158 @@ private struct CapsuleSegmentButton: View {
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: selected)
+    }
+}
+
+/// 通知中心页：待处理 + 历史记录（最近 20 条，内存）
+private struct NotificationHistoryPage: View {
+
+    @EnvironmentObject private var notifications: NotificationStore
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                HStack {
+                    Text("通知")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    if !notifications.pending.isEmpty || !notifications.history.isEmpty {
+                        Button {
+                            notifications.clearAll()
+                        } label: {
+                            Text("清空")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Theme.textTertiary)
+                                .padding(.horizontal, 8)
+                                .frame(height: 20)
+                                .background(Capsule().fill(Color.white.opacity(0.07)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Text("点底部铃铛返回")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(.top, 2)
+
+                if !notifications.pending.isEmpty {
+                    sectionHeader("待处理", count: notifications.pending.count)
+                    ForEach(notifications.pending) { n in
+                        row(n)
+                    }
+                }
+
+                if !notifications.history.isEmpty {
+                    sectionHeader("历史", count: notifications.history.count)
+                    ForEach(notifications.history) { n in
+                        row(n)
+                    }
+                }
+
+                if notifications.pending.isEmpty && notifications.history.isEmpty {
+                    VStack(spacing: 6) {
+                        Image(systemName: "bell.slash")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Theme.textTertiary)
+                        Text("暂无通知")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .padding(.vertical, 24)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.textSecondary)
+            Text("\(count)")
+                .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+            Spacer()
+        }
+    }
+
+    private func row(_ n: IslandNotification) -> some View {
+        let (stateText, stateColor) = stateBadge(n)
+        return HStack(spacing: 9) {
+            Circle()
+                .fill(n.kind.color)
+                .frame(width: 8, height: 8)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(n.source)
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                    Text(n.kind.label)
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .foregroundStyle(n.kind.color)
+                }
+                Text(n.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                if !n.message.isEmpty {
+                    Text(n.message)
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 6)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(stateText)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(stateColor)
+                    .lineLimit(1)
+                Text(relativeTime(n.respondedAt ?? n.creation))
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func stateBadge(_ n: IslandNotification) -> (String, Color) {
+        guard let r = n.response else { return ("等待中", n.kind.color) }
+        switch r.status {
+        case "answered":
+            if let c = r.clicked { return ("已点 · \(c)", Color(red: 0.35, green: 0.78, blue: 0.44)) }
+            if !r.selected.isEmpty {
+                return r.selected.count == 1
+                    ? ("已选 · \(r.selected[0])", Color(red: 0.35, green: 0.78, blue: 0.44))
+                    : ("已选 \(r.selected.count) 项", Color(red: 0.35, green: 0.78, blue: 0.44))
+            }
+            if let t = r.text { return ("已回复 · \(t)", Color(red: 0.35, green: 0.78, blue: 0.44)) }
+            return ("已回答", Color(red: 0.35, green: 0.78, blue: 0.44))
+        case "timeout":
+            return ("超时未答", Color(red: 1.0, green: 0.84, blue: 0.25))
+        default:
+            return ("已忽略", Theme.textTertiary)
+        }
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let df = RelativeDateTimeFormatter()
+        df.locale = Locale(identifier: "zh_CN")
+        return df.localizedString(for: date, relativeTo: Date())
     }
 }

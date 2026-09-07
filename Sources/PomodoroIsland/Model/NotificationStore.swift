@@ -164,6 +164,15 @@ final class NotificationStore: ObservableObject {
         if pending.isEmpty { onSettle?() }
     }
 
+    /// 清空：待处理按已忽略结算（会触发回调），历史删除
+    func clearAll() {
+        for n in pending {
+            finish(n.id, NotificationResponse(status: "dismissed"))
+        }
+        history.removeAll()
+        objectWillChange.send()
+    }
+
     private func startTimerIfNeeded() {
         guard timer == nil else { return }
         let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
