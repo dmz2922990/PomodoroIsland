@@ -155,7 +155,9 @@ final class NotchWindowController: ObservableObject {
 
     /// 通知内容高度变化（视图测量上报）
     func notificationHeightChanged(_ height: CGFloat) {
-        notificationContentHeight = max(120, height)
+        let clamped = max(120, height)
+        guard abs(clamped - notificationContentHeight) > 1 else { return }
+        notificationContentHeight = clamped
         if isExpanded, hasPendingNotifications?() == true {
             applyFrame()
         }

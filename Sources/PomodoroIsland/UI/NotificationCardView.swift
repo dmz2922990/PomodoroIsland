@@ -36,9 +36,8 @@ struct NotificationCardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 头部（来源徽标 + 类型 + 忽略）
