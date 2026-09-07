@@ -125,6 +125,41 @@ final class NotchWindowController: ObservableObject {
 
     /// 展开状态的外部保持条件（如：有待处理通知时不自动收起）
     var shouldStayOpen: (() -> Bool)?
+    /// 当前是否有待处理通知（决定展开 frame 用任务面板还是通知岛）
+    var hasPendingNotifications: (() -> Bool)?
+    /// 通知内容实测高度（由视图上报）
+    private var notificationContentHeight: CGFloat = 300
+
+    /// 通知态 frame：刘海带 + 动态内容高度
+    private func notificationFrame() -> NSRect {
+        let band = NotchScreenInfo.collapsedIslandHeight(on: screen)
+        let height = band + notificationContentHeight + 14
+        let frame = screen.frame
+        return NSRect(x: frame.midX - Self.panelWidth / 2,
+                      y: frame.maxY - height,
+                      width: Self.panelWidth,
+                      height: height)
+    }
+
+    /// 当前状态对应的窗口 frame
+    private func currentFrame() -> NSRect {
+        if isExpanded {
+            return hasPendingNotifications?() == true ? notificationFrame() : expandedFrame()
+        }
+        return collapsedIslandRect()
+    }
+
+    private func applyFrame() {
+        window?.setFrame(currentFrame(), display: true)
+    }
+
+    /// 通知内容高度变化（视图测量上报）
+    func notificationHeightChanged(_ height: CGFloat) {
+        notificationContentHeight = max(120, height)
+        if isExpanded, hasPendingNotifications?() == true {
+            applyFrame()
+        }
+    }
 
     private var interactiveFrame: NSRect {
         (window?.frame ?? collapsedIslandRect())
@@ -142,6 +177,7 @@ final class NotchWindowController: ObservableObject {
         window.ignoresMouseEvents = false
         window.staysInteractive = true
         mouseWatch.setClickTracking(false)
+        applyFrame()
     }
 
     func collapse() {
@@ -152,6 +188,7 @@ final class NotchWindowController: ObservableObject {
         window.ignoresMouseEvents = true
         window.staysInteractive = false
         mouseWatch.setClickTracking(true)
+        applyFrame()
     }
 
     func toggle() {
@@ -176,6 +213,12 @@ final class NotchWindowController: ObservableObject {
             // 点击展开：悬停不再触发展开，只清理可能残留的展开任务
             dwellWork?.cancel()
         }
+    }
+
+    /// 通知结算后仍展开：切回任务面板 frame
+    func returnToTaskFrameIfNeeded() {
+        guard isExpanded else { return }
+        applyFrame()
     }
 
     /// 外部保持条件解除后调用（通知结算）：光标不在面板内则收起

@@ -50,8 +50,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.shouldStayOpen = { [weak self] in
             !(self?.notifications.pending.isEmpty ?? true)
         }
+        controller.hasPendingNotifications = { [weak self] in
+            !(self?.notifications.pending.isEmpty ?? true)
+        }
         notifications.onSettle = { [weak self] in
+            // 通知全部结算：若仍展开则回到任务面板 frame，光标在外则收起
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self?.controller.returnToTaskFrameIfNeeded()
                 self?.controller.collapseIfCursorOutside()
             }
         }
