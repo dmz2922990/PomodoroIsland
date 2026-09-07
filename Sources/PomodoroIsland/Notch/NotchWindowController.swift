@@ -217,15 +217,10 @@ final class NotchWindowController: ObservableObject {
         }
     }
 
-    /// 通知全部结算：光标在面板上则切回任务面板（自然悬停），否则直接收起，
-    /// 不经过"任务面板闪现"的中间态
+    /// 通知全部结算：一律直接收起刘海条（主动点关闭也一样）
     func settleAfterNotifications() {
         guard isExpanded else { return }
-        if NSPointInRect(NSEvent.mouseLocation, interactiveFrame) {
-            applyFrame()
-        } else {
-            collapse()
-        }
+        collapse()
     }
 
     private func handleGlobalClick(_ point: NSPoint) {
