@@ -1,13 +1,10 @@
 import SwiftUI
 
-/// 刘海窗口的根视图：收起 = 翅膀岛屿；专注中悬停 = 垂降一行预览任务；
-/// 展开 = 任务面板 或 通知岛（仅有待处理通知时）
+/// 刘海窗口的根视图：收起 = 翅膀岛屿（专注中悬停垂降一行）；展开 = 任务面板 或 通知岛
 struct NotchRootView: View {
 
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var notifications: NotificationStore
-    @EnvironmentObject private var engine: PomodoroEngine
-    @EnvironmentObject private var store: TaskStore
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -25,9 +22,6 @@ struct NotchRootView: View {
                             removal: .opacity
                         ))
                 }
-            } else if controller.isPeeking {
-                PeekIslandView()
-                    .transition(.opacity)
             } else {
                 IslandStripView()
                     .transition(.opacity)
@@ -35,89 +29,8 @@ struct NotchRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.18), value: controller.isPeeking)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: controller.isExpanded)
-    }
-}
-
-/// 悬停预览岛：原收起条 + 向下垂降的一行当前任务（物理刘海遮挡场景专用）
-struct PeekIslandView: View {
-
-    @EnvironmentObject private var engine: PomodoroEngine
-    @EnvironmentObject private var store: TaskStore
-
-    private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
-    private var band: CGFloat { NotchScreenInfo.collapsedIslandHeight(on: screen) }
-    private var islandWidth: CGFloat { NotchScreenInfo.collapsedIslandWidth(on: screen) }
-
-    private var shape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0, bottomLeadingRadius: 14,
-            bottomTrailingRadius: 14, topTrailingRadius: 0,
-            style: .continuous
-        )
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                StatusIconView(
-                    phase: engine.phase,
-                    progress: engine.progress,
-                    isOvertime: engine.isOvertime,
-                    overtimeFraction: engine.overtimeFraction,
-                    size: 18
-                )
-                .frame(width: NotchScreenInfo.collapsedWing - 4, alignment: .center)
-
-                Spacer(minLength: 0)
-
-                RoundTimerBadge(progress: peekRingProgress, color: peekRingColor)
-                    .frame(width: NotchScreenInfo.collapsedWing - 4, alignment: .center)
-            }
-            .padding(.horizontal, 3)
-            .frame(height: band)
-
-            HStack(spacing: 6) {
-                Text(store.currentTask?.title ?? "未选择任务")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.92))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 8)
-                Text(engine.displayText)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textSecondary)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 26)
-        }
-        .frame(width: islandWidth)
-        .background(shape.fill(Theme.islandColor))
-        .background(shape.strokeBorder(Theme.cardBorder, lineWidth: 0.5))
-        .contentShape(shape)
-    }
-
-    private var peekRingProgress: Double {
-        engine.phase == .focus || engine.phase == .shortBreak || engine.phase == .longBreak
-            ? (engine.isOvertime ? 1 : engine.progress)
-            : 0
-    }
-
-    private var peekRingColor: Color {
-        if engine.isOvertime { return Color(red: 0.95, green: 0.30, blue: 0.25) }
-        switch engine.phase {
-        case .focus:
-            let p = engine.progress
-            if p < 1.0 / 3 { return .white }
-            if p < 2.0 / 3 { return Color(red: 1.0, green: 0.84, blue: 0.25) }
-            return Color(red: 0.95, green: 0.30, blue: 0.25)
-        case .shortBreak, .longBreak:
-            return Theme.accent(for: engine.phase)
-        case .idle:
-            return Color.white.opacity(0.35)
-        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: notifications.current?.id)
     }
 }
 
@@ -128,7 +41,6 @@ struct ExpandedIslandView: View {
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
-    @EnvironmentObject private var notifications: NotificationStore
 
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
 
@@ -204,7 +116,6 @@ struct ExpandedIslandView: View {
         .padding(.horizontal, 16)
     }
 }
-
 
 /// 通知岛：刘海带 + 通知内容，高度随内容自适应，仅展示通知本身
 struct NotificationIslandView: View {

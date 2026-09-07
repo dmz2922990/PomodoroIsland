@@ -8,6 +8,7 @@ struct IslandStripView: View {
 
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var notifications: NotificationStore
 
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
@@ -32,12 +33,40 @@ struct IslandStripView: View {
     }
 
     var body: some View {
-        content
-            .frame(width: islandWidth, height: bandHeight)
-            .background(shape.fill(Theme.islandColor))
-            .background(shape.strokeBorder(Theme.cardBorder, lineWidth: 0.5))
-            .contentShape(shape)
-            .animation(.easeInOut(duration: 0.15), value: engine.running)
+        VStack(spacing: 0) {
+            content
+                .frame(width: islandWidth, height: bandHeight)
+
+            // 专注中悬停预览：向下垂降一行当前任务（翅膀常驻不重建，避免闪烁）
+            if controller.isPeeking {
+                peekRow
+                    .frame(width: islandWidth, height: 26)
+                    .transition(.opacity)
+            }
+        }
+        .background(shape.fill(Theme.islandColor))
+        .background(shape.strokeBorder(Theme.cardBorder, lineWidth: 0.5))
+        .contentShape(shape)
+        .animation(.easeInOut(duration: 0.15), value: engine.running)
+        .animation(.easeInOut(duration: 0.18), value: controller.isPeeking)
+    }
+
+    // MARK: - 垂降行（当前任务 + 剩余时间）
+
+    private var peekRow: some View {
+        HStack(spacing: 6) {
+            Text(store.currentTask?.title ?? "未选择任务")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
+            Text(engine.displayText)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .padding(.horizontal, 14)
     }
 
     // MARK: - 三段内容
