@@ -140,7 +140,7 @@ final class NotchWindowController: ObservableObject {
         isExpanded = true
         trace("expand")
         window.ignoresMouseEvents = false
-        window.isExpandedVisible = true
+        window.staysInteractive = true
         mouseWatch.setClickTracking(false)
     }
 
@@ -150,7 +150,7 @@ final class NotchWindowController: ObservableObject {
         isExpanded = false
         trace("collapse")
         window.ignoresMouseEvents = true
-        window.isExpandedVisible = false
+        window.staysInteractive = false
         mouseWatch.setClickTracking(true)
     }
 

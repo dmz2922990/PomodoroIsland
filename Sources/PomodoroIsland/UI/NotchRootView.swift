@@ -1,11 +1,10 @@
 import SwiftUI
 
-/// 刘海窗口的根视图：收起 = 翅膀岛屿；展开 = 从刘海一体向下延伸的大岛屿；
-/// 有通知时顶部覆盖通知卡片
+/// 刘海窗口的根视图：收起 = 翅膀岛屿；展开 = 从刘海一体向下延伸的大岛屿
+/// （通知由独立的 NotificationWindowController 窗口展示）
 struct NotchRootView: View {
 
     @EnvironmentObject private var controller: NotchWindowController
-    @EnvironmentObject private var notifications: NotificationStore
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -20,25 +19,10 @@ struct NotchRootView: View {
                     .transition(.opacity)
             }
 
-            // 通知覆盖卡片：位于头部下方、面板之上
-            if let n = notifications.current, controller.isExpanded {
-                NotificationCardView(notification: n, store: notifications)
-                    .padding(.top, notchBandHeight + 6)
-                    .padding(.horizontal, 16)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .top)),
-                        removal: .opacity
-                    ))
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: controller.isExpanded)
-        .animation(.spring(response: 0.3, dampingFraction: 0.88), value: notifications.current?.id)
-    }
-
-    private var notchBandHeight: CGFloat {
-        NotchScreenInfo.collapsedIslandHeight(on: NotchScreenInfo.preferredScreen())
     }
 }
 

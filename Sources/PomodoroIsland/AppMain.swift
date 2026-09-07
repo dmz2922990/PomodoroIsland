@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var cancellables: [AnyCancellable] = []
     private var mcpServer: MCPServer?
+    private var notificationWindow: NotificationWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -41,22 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 完成当前任务 → 自动停止专注（store 层回调，UI 与 MCP 行为一致）
         store.onCurrentTaskCompleted = { [weak self] in self?.engine.stopIfFocused() }
         store.onSettingsChanged = { [weak self] in self?.syncMCPServer() }
-        // 通知到达 → 自动展开岛屿
-        notifications.onArrival = { [weak self] in
-            if self?.store.settings.notifyAutoExpand == true {
-                self?.controller.expand()
-            }
-        }
-        // 有待处理通知时岛屿保持展开；全部结算后光标在外则收起
-        controller.shouldStayOpen = { [weak self] in
-            !(self?.notifications.pending.isEmpty ?? true)
-        }
-        notifications.onSettle = { [weak self] in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                self?.controller.collapseIfCursorOutside()
-            }
-        }
+        // 通知 → 独立岛屿窗口（主岛屿行为不受影响）
         notifications.soundOn = store.settings.soundOn
+        let notifyWindow = NotificationWindowController(notifications: notifications)
+        notifyWindow.showWhen = { [weak self] in self?.store.settings.notifyAutoExpand ?? true }
+        notifyWindow.start()
+        notificationWindow = notifyWindow
         syncMCPServer()
 
         if ProcessInfo.processInfo.environment["POMO_SELFTEST"] == "1" {
@@ -174,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        notificationWindow?.shutdown()
         controller.shutdown()
     }
 

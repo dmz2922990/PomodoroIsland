@@ -59,7 +59,7 @@ final class NotchPanel: NSPanel {
                 ignoresMouseEvents = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self] in
                     Self.repost(event, at: screenLocation)
-                    self?.ignoresMouseEvents = !(self?.isExpandedVisible ?? false)
+                    self?.ignoresMouseEvents = !(self?.staysInteractive ?? true)
                 }
                 return
             }
@@ -67,8 +67,8 @@ final class NotchPanel: NSPanel {
         super.sendEvent(event)
     }
 
-    /// 控制器展开状态（仅用于穿透恢复判断，由 Objective-C 关联或简单镜像）
-    var isExpandedVisible = false
+    /// 点击穿透恢复后是否保持可交互（主窗口=展开时；通知窗口=始终）
+    var staysInteractive = false
 
     private static func repost(_ event: NSEvent, at screenLocation: NSPoint) {
         guard let screen = NSScreen.main else { return }
