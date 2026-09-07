@@ -58,6 +58,8 @@ struct IslandNotification: Identifiable, Equatable, Codable {
     var options: [NotificationOption] = []
     var multiSelect: Bool = false
     var inputPlaceholder: String = ""
+    /// choice 类型允许附带自定义输入框（可选，解码兼容旧数据）
+    var allowCustomInput: Bool? = nil
     /// 被动通知自动消失秒数
     var autoDismissAfter: TimeInterval?
     /// 交互通知响应截止秒数

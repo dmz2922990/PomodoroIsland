@@ -403,6 +403,7 @@ final class MCPServer {
                 return NotificationOption(id: "\(i)", label: label, detail: o["detail"] as? String ?? "")
             }
             n.multiSelect = multiSelect
+            n.allowCustomInput = args["allowInput"] as? Bool
         case .input:
             n.inputPlaceholder = args["placeholder"] as? String ?? "输入内容…"
         default:
@@ -564,6 +565,7 @@ final class MCPServer {
                     "buttons": ["type": "array", "items": ["type": "string"], "description": "type=buttons 时的 2-4 个按钮文案"],
                     "options": ["type": "array", "items": ["type": "object", "properties": ["label": ["type": "string"], "detail": ["type": "string"]], "required": ["label"]], "description": "type=choice 时的 2-6 个选项"],
                     "multiSelect": ["type": "boolean", "description": "choice 是否可多选，默认 false"],
+                    "allowInput": ["type": "boolean", "description": "choice 是否附带回填输入框（用户可自定义答案），默认 false"],
                     "placeholder": ["type": "string", "description": "type=input 的占位文本"],
                     "timeoutSeconds": ["type": "integer", "description": "等待响应秒数，默认 120，范围 5-600；超时返回 status=timeout"],
                     "source": ["type": "string", "description": "来源身份（Agent 名）"],

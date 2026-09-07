@@ -122,7 +122,32 @@ struct NotificationCardView: View {
             VStack(spacing: 6) {
                 ForEach(notification.options) { opt in
                     Button {
-                        if notification.multiSelect {
+                        if notification.allowCustomInput == true {
+                    HStack(spacing: 8) {
+                        TextField("自定义回答…", text: $inputText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textPrimary)
+                            .padding(.horizontal, 10)
+                            .frame(height: 30)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                            .onSubmit(submitCustomInput)
+
+                        Button(action: submitCustomInput) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(kind.color)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .opacity(inputText.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
+                    }
+                }
+
+                if notification.multiSelect {
                             if multiSelected.contains(opt.id) {
                                 multiSelected.remove(opt.id)
                             } else {
@@ -134,7 +159,32 @@ struct NotificationCardView: View {
                         }
                     } label: {
                         HStack(spacing: 8) {
-                            if notification.multiSelect {
+                            if notification.allowCustomInput == true {
+                    HStack(spacing: 8) {
+                        TextField("自定义回答…", text: $inputText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textPrimary)
+                            .padding(.horizontal, 10)
+                            .frame(height: 30)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                            .onSubmit(submitCustomInput)
+
+                        Button(action: submitCustomInput) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(kind.color)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .opacity(inputText.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
+                    }
+                }
+
+                if notification.multiSelect {
                                 Image(systemName: multiSelected.contains(opt.id) ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 12))
                                     .foregroundStyle(multiSelected.contains(opt.id) ? kind.color : Theme.textTertiary)
@@ -160,6 +210,31 @@ struct NotificationCardView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                }
+
+                if notification.allowCustomInput == true {
+                    HStack(spacing: 8) {
+                        TextField("自定义回答…", text: $inputText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textPrimary)
+                            .padding(.horizontal, 10)
+                            .frame(height: 30)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                            .onSubmit(submitCustomInput)
+
+                        Button(action: submitCustomInput) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(kind.color)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .opacity(inputText.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
+                    }
                 }
 
                 if notification.multiSelect {
@@ -202,6 +277,12 @@ struct NotificationCardView: View {
         default:
             EmptyView()
         }
+    }
+
+    private func submitCustomInput() {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        store.respond(notification.id, NotificationResponse(status: "answered", text: text))
     }
 
     private func submitInput() {
