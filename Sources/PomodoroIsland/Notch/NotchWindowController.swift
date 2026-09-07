@@ -133,7 +133,8 @@ final class NotchWindowController: ObservableObject {
     /// 通知态 frame：刘海带 + 动态内容高度
     private func notificationFrame() -> NSRect {
         let band = NotchScreenInfo.collapsedIslandHeight(on: screen)
-        let height = band + notificationContentHeight + 14
+        // 探针已测入卡片内边距，这里只加少量缓冲
+        let height = band + notificationContentHeight + 6
         let frame = screen.frame
         return NSRect(x: frame.midX - Self.panelWidth / 2,
                       y: frame.maxY - height,
@@ -155,7 +156,7 @@ final class NotchWindowController: ObservableObject {
 
     /// 通知内容高度变化（视图测量上报）
     func notificationHeightChanged(_ height: CGFloat) {
-        let clamped = max(120, height)
+        let clamped = max(90, height)
         guard abs(clamped - notificationContentHeight) > 1 else { return }
         notificationContentHeight = clamped
         if isExpanded, hasPendingNotifications?() == true {
