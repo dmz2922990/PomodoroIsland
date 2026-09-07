@@ -9,7 +9,7 @@ struct NotchRootView: View {
     var body: some View {
         ZStack(alignment: .top) {
             if controller.isExpanded {
-                if notifications.current != nil && !controller.taskPanelOverride {
+                if notifications.current != nil {
                     NotificationIslandView()
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
@@ -155,8 +155,6 @@ struct NotificationIslandView: View {
             }
         }
         .frame(width: NotchWindowController.panelWidth)
-        .contentShape(Rectangle())
-        .onTapGesture { controller.requestTaskPanel() }
     }
 }
 

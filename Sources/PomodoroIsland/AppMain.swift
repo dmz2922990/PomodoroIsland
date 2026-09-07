@@ -43,7 +43,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.onSettingsChanged = { [weak self] in self?.syncMCPServer() }
         // 通知到达 → 主岛屿展开展示；有待处理通知时保持展开
         notifications.onArrival = { [weak self] in
-            self?.controller.taskPanelOverride = false
             if self?.store.settings.notifyAutoExpand == true {
                 self?.controller.expand()
             }
