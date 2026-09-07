@@ -602,9 +602,12 @@ private struct TaskDropDelegate: DropDelegate {
     }
 }
 
-/// 单条任务
+/// 单条任务（双击标题或铅笔按钮进入编辑，回车确认 / Esc 取消）
 struct TaskRow: View {
     let task: TaskItem
+    @EnvironmentObject private var store: TaskStore
+    @State private var isEditing = false
+    @State private var editText = ""
     let isCurrent: Bool
     let isHovered: Bool
     let onHover: (Bool) -> Void
@@ -626,11 +629,24 @@ struct TaskRow: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(task.title)
-                    .font(.system(size: 12.5, weight: isCurrent ? .semibold : .regular))
-                    .strikethrough(task.isDone, color: Theme.textTertiary)
-                    .foregroundStyle(task.isDone ? Theme.textTertiary : Theme.textPrimary)
-                    .lineLimit(1)
+                if isEditing {
+                    TextField("任务内容", text: $editText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .onSubmit(commitRename)
+                        .onExitCommand { isEditing = false }
+                } else {
+                    Text(task.title)
+                        .font(.system(size: 12.5, weight: isCurrent ? .semibold : .regular))
+                        .strikethrough(task.isDone, color: Theme.textTertiary)
+                        .foregroundStyle(task.isDone ? Theme.textTertiary : Theme.textPrimary)
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) {
+                            editText = task.title
+                            isEditing = true
+                        }
+                }
 
                 Text(subtitle)
                     .font(.system(size: 9.5))
@@ -649,6 +665,18 @@ struct TaskRow: View {
             }
 
             if isHovered {
+                Button {
+                    editText = task.title
+                    isEditing = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .help("修改任务")
+                .transition(.opacity)
+
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.system(size: 10.5))
@@ -667,6 +695,13 @@ struct TaskRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .onHover { hovering in onHover(hovering) }
+    }
+
+    private func commitRename() {
+        let trimmed = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+        isEditing = false
+        guard !trimmed.isEmpty, trimmed != task.title else { return }
+        store.rename(task.id, to: trimmed)
     }
 
     private var subtitle: String {
