@@ -608,6 +608,7 @@ struct TaskRow: View {
     @EnvironmentObject private var store: TaskStore
     @State private var isEditing = false
     @State private var editText = ""
+    @FocusState private var renameFieldFocused: Bool
     let isCurrent: Bool
     let isHovered: Bool
     let onHover: (Bool) -> Void
@@ -634,6 +635,18 @@ struct TaskRow: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Theme.textPrimary)
+                        .padding(.horizontal, 6)
+                        .frame(height: 24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.white.opacity(0.10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .strokeBorder(Color(red: 1.0, green: 0.42, blue: 0.34).opacity(0.9), lineWidth: 1)
+                                )
+                        )
+                        .focused($renameFieldFocused)
+                        .onAppear { renameFieldFocused = true }
                         .onSubmit(commitRename)
                         .onExitCommand { isEditing = false }
                 } else {
@@ -670,17 +683,23 @@ struct TaskRow: View {
                     isEditing = true
                 } label: {
                     Image(systemName: "pencil")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textTertiary)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("修改任务")
+                .help("修改任务（双击标题也可以）")
                 .transition(.opacity)
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textTertiary)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .transition(.opacity)
