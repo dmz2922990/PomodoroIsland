@@ -268,7 +268,14 @@ final class NotchWindowController: ObservableObject {
     }
 
     private func handleGlobalClick(_ point: NSPoint) {
-        if !isExpanded, NSPointInRect(point, collapsedIslandRect().insetBy(dx: -4, dy: -4)) {
+        guard !isExpanded else { return }
+        // 主岛带区点击 → 展开
+        if NSPointInRect(point, collapsedIslandRect().insetBy(dx: -4, dy: -4)) {
+            expand()
+            return
+        }
+        // 预览垂降行点击 → 展开
+        if isPeeking, NSPointInRect(point, peekReadyFrame().insetBy(dx: -4, dy: -4)) {
             expand()
         }
     }
