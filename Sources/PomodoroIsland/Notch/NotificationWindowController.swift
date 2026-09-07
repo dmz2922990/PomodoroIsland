@@ -8,8 +8,8 @@ final class NotificationWindowController {
 
     static let width: CGFloat = 380
     static let height: CGFloat = 380
-    /// 与收起态主岛屿的间距
-    static let gapBelowIsland: CGFloat = 6
+    /// 与收起态主岛屿的间距（0 = 连体，与主岛底部圆角形成腰身）
+    static let gapBelowIsland: CGFloat = 0
 
     private var window: NotchPanel?
     private let notifications: NotificationStore

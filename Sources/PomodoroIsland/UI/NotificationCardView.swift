@@ -39,21 +39,20 @@ struct NotificationCardView: View {
         .padding(14)
         .background(
             UnevenRoundedRectangle(
-                topLeadingRadius: 14, bottomLeadingRadius: 20,
-                bottomTrailingRadius: 20, topTrailingRadius: 14,
+                topLeadingRadius: 10, bottomLeadingRadius: 20,
+                bottomTrailingRadius: 20, topTrailingRadius: 10,
                 style: .continuous
             )
             .fill(Theme.islandColor)
             .overlay(
                 UnevenRoundedRectangle(
-                    topLeadingRadius: 14, bottomLeadingRadius: 20,
-                    bottomTrailingRadius: 20, topTrailingRadius: 14,
+                    topLeadingRadius: 10, bottomLeadingRadius: 20,
+                    bottomTrailingRadius: 20, topTrailingRadius: 10,
                     style: .continuous
                 )
                 .strokeBorder(Theme.cardBorder, lineWidth: 0.5)
             )
         )
-        .shadow(color: .black.opacity(0.3), radius: 10, y: 3)
     }
 
     // MARK: - 头部（来源徽标 + 类型 + 忽略）
