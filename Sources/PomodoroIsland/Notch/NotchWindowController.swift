@@ -23,8 +23,6 @@ final class NotchWindowController: ObservableObject {
     static let panelHeight: CGFloat = 492
     /// 判定"离开面板"的外边距
     static let leaveMargin: CGFloat = 14
-    /// 悬停停留多久才展开（毫秒）
-    static let dwellToExpand: TimeInterval = 0.12
     /// 离开后多久自动收起
     static let delayToCollapse: TimeInterval = 0.35
 
@@ -169,19 +167,8 @@ final class NotchWindowController: ObservableObject {
                 scheduleCollapse()
             }
         } else {
-            // 悬停在岛屿（刘海+下巴）内稍作停留后展开
-            let hoverRect = collapsedIslandRect().insetBy(dx: -4, dy: -4)
-            if NSPointInRect(point, hoverRect) {
-                dwellWork?.cancel()
-                let work = DispatchWorkItem { [weak self] in
-                    self?.expand()
-                }
-                dwellWork = work
-                trace("move:in-strip-schedule-dwell")
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.dwellToExpand, execute: work)
-            } else {
-                dwellWork?.cancel()
-            }
+            // 点击展开：悬停不再触发展开，只清理可能残留的展开任务
+            dwellWork?.cancel()
         }
     }
 
