@@ -98,21 +98,17 @@ struct IslandStripView: View {
 
     // MARK: - 计时环状态
 
-    /// 当前连续专注轮次（休息后清零）
-    private var focusRound: Int { engine.focusStreak + 1 }
-
     private var ringColor: Color {
         if engine.isOvertime {
             return Color(red: 0.95, green: 0.30, blue: 0.25)
         }
         switch engine.phase {
         case .focus:
-            // 第 1 轮白、第 2 轮黄、第 3 轮起一直红
-            switch focusRound {
-            case 1: return .white
-            case 2: return Color(red: 1.0, green: 0.84, blue: 0.25)
-            default: return Color(red: 0.95, green: 0.30, blue: 0.25)
-            }
+            // 每轮专注内三阶段：前 1/3 白、中 1/3 黄、后 1/3 红
+            let p = engine.progress
+            if p < 1.0 / 3 { return .white }
+            if p < 2.0 / 3 { return Color(red: 1.0, green: 0.84, blue: 0.25) }
+            return Color(red: 0.95, green: 0.30, blue: 0.25)
         case .shortBreak, .longBreak:
             return Theme.accent(for: engine.phase)
         case .idle:

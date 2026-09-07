@@ -40,8 +40,6 @@ final class PomodoroEngine: ObservableObject {
     @Published private(set) var now = Date()
     /// 超时（专注到点后未停下）的开始时刻；nil = 非超时
     @Published private(set) var overtimeStartedAt: Date?
-    /// 连续专注轮次：每次专注完成 +1，开始休息清零（驱动计时环轮次颜色）
-    @Published private(set) var focusStreak = 0
     /// 暂停时冻结的超时已过秒数
     @Published private(set) var pausedOvertimeSeconds: TimeInterval?
 
@@ -137,7 +135,6 @@ final class PomodoroEngine: ObservableObject {
     }
 
     func startBreak() {
-        focusStreak = 0  // 休息重置连续轮次
         phase = nextBreakPhase()
         pausedRemainder = nil
         begin(duration: phaseDuration)
@@ -199,7 +196,6 @@ final class PomodoroEngine: ObservableObject {
     /// 专注到点但用户没停：记录番茄（超时，不计轮次）并进入腐烂模式
     private func beginOvertime() {
         overtimeStartedAt = Date()
-        focusStreak += 1
         store.recordFocusEnd(for: store.currentTaskId, onTime: false)
         notify(title: "🍅 专注到点！", body: "已记录 1 个番茄。还在继续？小心果子烂掉～")
         playSound()
