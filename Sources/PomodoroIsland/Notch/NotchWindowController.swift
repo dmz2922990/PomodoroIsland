@@ -217,16 +217,13 @@ final class NotchWindowController: ObservableObject {
         }
     }
 
-    /// 通知结算后仍展开：切回任务面板 frame
-    func returnToTaskFrameIfNeeded() {
+    /// 通知全部结算：光标在面板上则切回任务面板（自然悬停），否则直接收起，
+    /// 不经过"任务面板闪现"的中间态
+    func settleAfterNotifications() {
         guard isExpanded else { return }
-        applyFrame()
-    }
-
-    /// 外部保持条件解除后调用（通知结算）：光标不在面板内则收起
-    func collapseIfCursorOutside() {
-        guard isExpanded, shouldStayOpen?() != true else { return }
-        if !NSPointInRect(NSEvent.mouseLocation, interactiveFrame) {
+        if NSPointInRect(NSEvent.mouseLocation, interactiveFrame) {
+            applyFrame()
+        } else {
             collapse()
         }
     }
