@@ -90,6 +90,8 @@ final class NotificationStore: ObservableObject {
     var soundOn = true
     /// 通知到达时自动展开岛屿
     var onArrival: (() -> Void)?
+    /// 任一通知结算（响应/超时/忽略/过期）后回调
+    var onSettle: (() -> Void)?
 
     private var completions: [UUID: (NotificationResponse) -> Void] = [:]
     private var timer: Timer?
@@ -159,6 +161,7 @@ final class NotificationStore: ObservableObject {
         if history.count > Self.maxHistory { history.removeLast() }
         objectWillChange.send()
         completions.removeValue(forKey: id)?(response)
+        if pending.isEmpty { onSettle?() }
     }
 
     private func startTimerIfNeeded() {

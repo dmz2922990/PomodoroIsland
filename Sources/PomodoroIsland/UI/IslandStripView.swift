@@ -8,6 +8,7 @@ struct IslandStripView: View {
 
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
+    @EnvironmentObject private var notifications: NotificationStore
 
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
 
@@ -43,14 +44,23 @@ struct IslandStripView: View {
 
     private var content: some View {
         HStack(spacing: 0) {
-            // 左翼：状态图标
-            StatusIconView(
-                phase: engine.phase,
-                progress: engine.progress,
-                isOvertime: engine.isOvertime,
-                overtimeFraction: engine.overtimeFraction,
-                size: 18
-            )
+            // 左翼：状态图标（有待处理通知时叠加指示点）
+            ZStack(alignment: .topTrailing) {
+                StatusIconView(
+                    phase: engine.phase,
+                    progress: engine.progress,
+                    isOvertime: engine.isOvertime,
+                    overtimeFraction: engine.overtimeFraction,
+                    size: 18
+                )
+                if let newest = notifications.current {
+                    Circle()
+                        .fill(newest.kind.color)
+                        .frame(width: 6, height: 6)
+                        .overlay(Circle().stroke(Theme.islandColor, lineWidth: 1.5))
+                        .offset(x: 3, y: -2)
+                }
+            }
             .frame(width: NotchScreenInfo.collapsedWing - 4, alignment: .center)
             .frame(maxHeight: .infinity)
 

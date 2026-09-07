@@ -47,6 +47,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.controller.expand()
             }
         }
+        // 有待处理通知时岛屿保持展开；全部结算后光标在外则收起
+        controller.shouldStayOpen = { [weak self] in
+            !(self?.notifications.pending.isEmpty ?? true)
+        }
+        notifications.onSettle = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                self?.controller.collapseIfCursorOutside()
+            }
+        }
         notifications.soundOn = store.settings.soundOn
         syncMCPServer()
 

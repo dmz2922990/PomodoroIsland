@@ -123,6 +123,9 @@ final class NotchWindowController: ObservableObject {
         )
     }
 
+    /// 展开状态的外部保持条件（如：有待处理通知时不自动收起）
+    var shouldStayOpen: (() -> Bool)?
+
     private var interactiveFrame: NSRect {
         (window?.frame ?? collapsedIslandRect())
             .insetBy(dx: -Self.leaveMargin, dy: -Self.leaveMargin)
@@ -162,13 +165,24 @@ final class NotchWindowController: ObservableObject {
                     trace("move:inside-cancel-collapse")
                 }
                 collapseWork?.cancel()
-            } else {
+            } else if shouldStayOpen?() != true {
                 trace("move:outside-schedule-collapse")
                 scheduleCollapse()
+            } else {
+                // 保持展开（有待处理通知），仅取消已排期的收起
+                collapseWork?.cancel()
             }
         } else {
             // 点击展开：悬停不再触发展开，只清理可能残留的展开任务
             dwellWork?.cancel()
+        }
+    }
+
+    /// 外部保持条件解除后调用（通知结算）：光标不在面板内则收起
+    func collapseIfCursorOutside() {
+        guard isExpanded, shouldStayOpen?() != true else { return }
+        if !NSPointInRect(NSEvent.mouseLocation, interactiveFrame) {
+            collapse()
         }
     }
 
