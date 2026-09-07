@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// 通知类型：info/success/warning/error 为被动展示；buttons/choice/input 为阻塞交互
-enum NotificationKind: String, CaseIterable {
+enum NotificationKind: String, CaseIterable, Codable {
     case info, success, warning, error
     case buttons, choice, input
 
@@ -32,14 +32,14 @@ enum NotificationKind: String, CaseIterable {
 }
 
 /// 交互选项 / 按钮
-struct NotificationOption: Identifiable, Equatable {
+struct NotificationOption: Identifiable, Equatable, Codable {
     let id: String
     let label: String
     var detail: String = ""
 }
 
 /// 用户对一条通知的响应
-struct NotificationResponse: Equatable {
+struct NotificationResponse: Equatable, Codable {
     /// answered / dismissed / timeout
     var status: String
     var clicked: String?
@@ -48,8 +48,8 @@ struct NotificationResponse: Equatable {
 }
 
 /// 一条通知
-struct IslandNotification: Identifiable, Equatable {
-    let id: UUID = UUID()
+struct IslandNotification: Identifiable, Equatable, Codable {
+    var id: UUID = UUID()
     var source: String
     var kind: NotificationKind
     var title: String
@@ -95,6 +95,14 @@ final class NotificationStore: ObservableObject {
 
     private var completions: [UUID: (NotificationResponse) -> Void] = [:]
     private var timer: Timer?
+    private var saveWork: DispatchWorkItem?
+    private let fileURL: URL = FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("PomodoroIsland/notifications.json")
+
+    init() {
+        loadPersisted()
+    }
 
     /// 当前展示中的通知（最新一条）
     var current: IslandNotification? { pending.first }
@@ -162,6 +170,7 @@ final class NotificationStore: ObservableObject {
         objectWillChange.send()
         completions.removeValue(forKey: id)?(response)
         if pending.isEmpty { onSettle?() }
+        scheduleSave()
     }
 
     /// 清空：待处理按已忽略结算（会触发回调），历史删除
@@ -171,6 +180,34 @@ final class NotificationStore: ObservableObject {
         }
         history.removeAll()
         objectWillChange.send()
+        scheduleSave()
+    }
+
+    // MARK: - 持久化（历史记录，重启可查；待处理随进程失效不保存）
+
+    private func scheduleSave() {
+        saveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.saveNow() }
+        saveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    private func saveNow() {
+        do {
+            let dir = fileURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(history)
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            NSLog("PomodoroIsland notifications save failed: \(error)")
+        }
+    }
+
+    private func loadPersisted() {
+        guard let data = try? Data(contentsOf: fileURL) else { return }
+        if let loaded = try? JSONDecoder().decode([IslandNotification].self, from: data) {
+            history = loaded
+        }
     }
 
     private func startTimerIfNeeded() {
