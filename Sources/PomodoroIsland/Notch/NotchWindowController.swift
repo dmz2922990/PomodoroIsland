@@ -127,6 +127,10 @@ final class NotchWindowController: ObservableObject {
     var shouldStayOpen: (() -> Bool)?
     /// 当前是否有待处理通知（决定展开 frame 用任务面板还是通知岛）
     var hasPendingNotifications: (() -> Bool)?
+    /// 是否允许悬停预览（专注进行中 + 物理刘海屏，由外部注入）
+    var peekCondition: (() -> Bool)?
+    /// 悬停预览态：主岛向下垂降一行显示当前任务
+    @Published private(set) var isPeeking = false
     /// 通知内容实测高度（由视图上报）
     private var notificationContentHeight: CGFloat = 300
 
@@ -142,11 +146,39 @@ final class NotchWindowController: ObservableObject {
                       height: height)
     }
 
+    private var peekRowHeight: CGFloat { 26 }
+
+    /// 预览态 frame：主岛向下垂降一行
+    private func peekFrame() -> NSRect {
+        let base = collapsedIslandRect()
+        return NSRect(x: base.minX, y: base.minY - peekRowHeight,
+                      width: base.width, height: base.height + peekRowHeight)
+    }
+
+    private func openPeek() {
+        guard !isPeeking, !isExpanded else { return }
+        isPeeking = true
+        trace("peek-open")
+        applyFrame()
+    }
+
+    private func closePeek() {
+        guard isPeeking else { return }
+        isPeeking = false
+        trace("peek-close")
+        applyFrame()
+    }
+
+    private func shouldAutoPeek() -> Bool {
+        peekCondition?() == true
+    }
+
     /// 当前状态对应的窗口 frame
     private func currentFrame() -> NSRect {
         if isExpanded {
             return hasPendingNotifications?() == true ? notificationFrame() : expandedFrame()
         }
+        if isPeeking { return peekFrame() }
         return collapsedIslandRect()
     }
 
@@ -175,6 +207,7 @@ final class NotchWindowController: ObservableObject {
         guard !isExpanded, let window = window else { return }
         dwellWork?.cancel()
         collapseWork?.cancel()
+        isPeeking = false
         isExpanded = true
         trace("expand")
         window.ignoresMouseEvents = false
@@ -186,6 +219,7 @@ final class NotchWindowController: ObservableObject {
     func collapse() {
         guard isExpanded, let window = window else { return }
         collapseWork?.cancel()
+        isPeeking = false
         isExpanded = false
         trace("collapse")
         window.ignoresMouseEvents = true
@@ -213,8 +247,16 @@ final class NotchWindowController: ObservableObject {
                 collapseWork?.cancel()
             }
         } else {
-            // 点击展开：悬停不再触发展开，只清理可能残留的展开任务
+            // 收起态：专注中悬停主岛 → 垂降一行预览任务；移出或条件解除 → 收回
             dwellWork?.cancel()
+            if isPeeking {
+                if !shouldAutoPeek() || !NSPointInRect(point, peekFrame().insetBy(dx: -4, dy: -4)) {
+                    closePeek()
+                }
+            } else if shouldAutoPeek(),
+                      NSPointInRect(point, collapsedIslandRect().insetBy(dx: -4, dy: -8)) {
+                openPeek()
+            }
         }
     }
 

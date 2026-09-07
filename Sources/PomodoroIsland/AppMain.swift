@@ -53,6 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.hasPendingNotifications = { [weak self] in
             !(self?.notifications.pending.isEmpty ?? true)
         }
+        // 悬停预览：专注进行中 + 物理刘海屏（任务名被刘海遮挡时才有意义）
+        controller.peekCondition = { [weak self] in
+            guard let self else { return false }
+            return self.engine.phase == .focus && self.engine.running
+                && NotchScreenInfo.physicalNotchHeight(on: NotchScreenInfo.preferredScreen()) > 0
+        }
         notifications.onSettle = { [weak self] in
             self?.controller.settleAfterNotifications()
         }
