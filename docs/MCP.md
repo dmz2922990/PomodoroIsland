@@ -29,6 +29,71 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 > 端口可在设置页修改（1024-65535）；服务仅监听本机 127.0.0.1，不对外网暴露。
 
+## 快速上手（curl 实测）
+
+服务是标准 JSON-RPC 2.0 over HTTP，用 curl 就能直接调试。以下命令均可直接复制执行。
+
+**① 握手（initialize），记录返回的 `MCP-Session-Id` 响应头（后续可带上作为来源身份）：**
+
+```bash
+curl -s -i -X POST http://127.0.0.1:9527/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"我的工具","version":"1.0"}}}'
+```
+
+响应：
+
+```json
+{"result":{"capabilities":{"tools":{}},"protocolVersion":"2025-06-18","serverInfo":{"name":"pomodoro-island","version":"1.2.0"}},"jsonrpc":"2.0","id":1}
+```
+
+**② 列出全部工具：**
+
+```bash
+curl -s -X POST http://127.0.0.1:9527/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+```
+
+**③ 发一条被动通知（岛屿立即弹出，8 秒消失）：**
+
+```bash
+curl -s -X POST http://127.0.0.1:9527/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"notify","arguments":{"title":"🔔 结算流程复测","message":"10 秒后消失，观察是否直接缩回刘海条、不再闪任务面板","level":"success","autoDismiss":10,"source":"ZCode"}}}'
+```
+
+**④ 查询今日状态：**
+
+```bash
+curl -s -X POST http://127.0.0.1:9527/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_status","arguments":{}}}' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['content'][0]['text'])"
+```
+
+输出：
+
+```json
+{
+  "currentTask" : "写周报",
+  "displayTime" : "24:57",
+  "phase" : "focus",
+  "remainingSeconds" : 1497,
+  "running" : true,
+  "todayFocusCount" : 3
+}
+```
+
+以下示例统一使用这个 helper 简化书写：
+
+```bash
+MCP=http://127.0.0.1:9527/mcp
+call() { curl -s -X POST $MCP -H 'Content-Type: application/json' -d "$1"; }
+```
+
+---
+
 ## 工具总览（9 个）
 
 | 工具 | 域 | 阻塞 | 说明 |
@@ -49,8 +114,8 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 ### list_tasks
 
-```json
-{"name": "list_tasks", "arguments": {"filter": "open"}}
+```bash
+call '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"list_tasks","arguments":{"filter":"open"}}}'
 ```
 
 - `filter`：`open`（未完成，默认 all 之外的常用值）/ `done` / `all`
@@ -71,8 +136,8 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 ### add_task
 
-```json
-{"name": "add_task", "arguments": {"title": "复习 MCP 文档", "planned": 2}}
+```bash
+call '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"add_task","arguments":{"title":"复习 MCP 文档","planned":2}}}'
 ```
 
 - `title`（必填）：任务标题
@@ -81,8 +146,9 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 ### update_task
 
-```json
-{"name": "update_task", "arguments": {"id": "E9F3C075-...", "isDone": true}}
+```bash
+ID="E9F3C075-C39E-403D-A62F-50C063F01578"   # 来自 list_tasks
+call "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/call\",\"params\":{\"name\":\"update_task\",\"arguments\":{\"id\":\"$ID\",\"isDone\":true}}}"
 ```
 
 - `id`（必填）：任务 id（来自 `list_tasks`）
@@ -91,14 +157,14 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 ### delete_task
 
-```json
-{"name": "delete_task", "arguments": {"id": "E9F3C075-..."}}
+```bash
+call "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"tools/call\",\"params\":{\"name\":\"delete_task\",\"arguments\":{\"id\":\"$ID\"}}}"
 ```
 
 ### set_current_task
 
-```json
-{"name": "set_current_task", "arguments": {"id": "E4778FAC-..."}}
+```bash
+call "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"tools/call\",\"params\":{\"name\":\"set_current_task\",\"arguments\":{\"id\":\"$ID\"}}}"
 ```
 
 - 仅未完成任务可设为当前；之后完成的番茄计入该任务
@@ -109,14 +175,14 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 ### notify（被动通知，非阻塞）
 
+```bash
+call '{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"notify","arguments":{"title":"部署完成","message":"生产环境已更新到 v1.2.0","level":"success","autoDismiss":8,"source":"DeployBot"}}}'
+```
+
+响应：
+
 ```json
-{"name": "notify", "arguments": {
-  "title": "部署完成",
-  "message": "生产环境已更新到 v1.2.0",
-  "level": "success",
-  "autoDismiss": 8,
-  "source": "DeployBot"
-}}
+{"result":{"content":[{"text":"{\n  \"autoDismiss\" : 8,\n  \"id\" : \"C5D24F06-...\",\n  \"source\" : \"DeployBot\"\n}","type":"text"}],"isError":false},"jsonrpc":"2.0","id":20}
 ```
 
 - `title`（必填）；`level`：`info` / `success` / `warning` / `error`（四种配色）
@@ -130,37 +196,21 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 **① 按钮（buttons）**——2-4 个按钮：
 
-```json
-{"name": "ask_user", "arguments": {
-  "title": "部署确认",
-  "message": "即将发布到生产环境",
-  "type": "buttons",
-  "buttons": ["立即发布", "取消"],
-  "timeoutSeconds": 120,
-  "source": "DeployBot"
-}}
+```bash
+# 阻塞直到用户在岛屿上点击按钮（或 120 秒超时）
+call '{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"ask_user","arguments":{"title":"部署确认","message":"即将发布到生产环境","type":"buttons","buttons":["立即发布","取消"],"timeoutSeconds":120,"source":"DeployBot"}}}'
 ```
 
-用户点击后返回：
+用户点击"立即发布"后，curl 返回：
 
 ```json
-{"status": "answered", "clicked": "立即发布", "source": "DeployBot"}
+{"result":{"content":[{"text":"{\n  \"status\" : \"answered\",\n  \"clicked\" : \"立即发布\",\n  \"source\" : \"DeployBot\"\n}","type":"text"}],"isError":false},"jsonrpc":"2.0","id":21}
 ```
 
 **② 选项（choice）**——2-6 个选项，支持说明文字、多选、自定义输入：
 
-```json
-{"name": "ask_user", "arguments": {
-  "title": "今晚吃什么？",
-  "type": "choice",
-  "options": [
-    {"label": "麦当劳", "detail": "1+1 真香"},
-    {"label": "沙县小吃", "detail": "经济实惠"}
-  ],
-  "allowInput": true,
-  "multiSelect": false,
-  "timeoutSeconds": 300
-}}
+```bash
+call '{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"ask_user","arguments":{"title":"今晚吃什么？","type":"choice","options":[{"label":"麦当劳","detail":"1+1 真香"},{"label":"沙县小吃","detail":"经济实惠"}],"allowInput":true,"multiSelect":false,"timeoutSeconds":300}}}'
 ```
 
 - 单选：点击选项立即返回 `{"status": "answered", "selected": ["麦当劳"]}`
@@ -169,13 +219,8 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 
 **③ 输入（input）**——纯文本输入：
 
-```json
-{"name": "ask_user", "arguments": {
-  "title": "给本轮专注起个名字",
-  "type": "input",
-  "placeholder": "例如：重构登录模块",
-  "timeoutSeconds": 120
-}}
+```bash
+call '{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"ask_user","arguments":{"title":"给本轮专注起个名字","type":"input","placeholder":"例如：重构登录模块","timeoutSeconds":120}}}'
 ```
 
 返回 `{"status": "answered", "text": "重构登录模块"}`
@@ -216,6 +261,20 @@ PomodoroIsland 内嵌一个 MCP（Model Context Protocol）服务，让接入的
 > Agent：（调用 `update_task {"id": "...", "isDone": true}`，然后 `get_status` 确认今日番茄数）
 >
 > Agent：已勾掉 ✅ 今天完成了 3 个番茄。要不要休息 15 分钟？
+
+## 错误响应示例
+
+工具级错误（如任务不存在、缺参数、超上限）通过 `isError: true` 返回：
+
+```json
+{"result":{"content":[{"text":"来源「DeployBot」已有 2 条待响应通知，请先等待处理","type":"text"}],"isError":true},"jsonrpc":"2.0","id":30}
+```
+
+协议级错误（如未知方法）走 JSON-RPC error 字段：
+
+```json
+{"jsonrpc":"2.0","id":31,"error":{"code":-32601,"message":"method not found: xxx"}}
+```
 
 ## 注意事项
 
