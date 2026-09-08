@@ -189,8 +189,17 @@ final class NotchWindowController: ObservableObject {
         return peekReadyFrame()
     }
 
-    private func applyFrame() {
-        window?.setFrame(currentFrame(), display: true)
+    private func applyFrame(animated: Bool = false) {
+        if animated {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.25
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                ctx.allowsImplicitAnimation = true
+                window?.animator().setFrame(currentFrame(), display: true)
+            }
+        } else {
+            window?.setFrame(currentFrame(), display: true)
+        }
     }
 
     /// 通知内容高度变化（视图测量上报）
@@ -220,7 +229,7 @@ final class NotchWindowController: ObservableObject {
         window.ignoresMouseEvents = false
         window.staysInteractive = true
         mouseWatch.setClickTracking(false)
-        applyFrame()
+        applyFrame(animated: true)
     }
 
     func collapse() {
@@ -232,7 +241,7 @@ final class NotchWindowController: ObservableObject {
         window.ignoresMouseEvents = true
         window.staysInteractive = false
         mouseWatch.setClickTracking(true)
-        applyFrame()
+        applyFrame(animated: true)
     }
 
     func toggle() {

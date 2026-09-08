@@ -36,8 +36,6 @@ struct ExpandedIslandView: View {
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
 
-    @State private var reveal: CGFloat = 0
-
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
 
     private var band: CGFloat {
@@ -46,10 +44,6 @@ struct ExpandedIslandView: View {
 
     private var fullHeight: CGFloat {
         band + NotchScreenInfo.expandedExtension + NotchWindowController.panelHeight
-    }
-
-    private var displayHeight: CGFloat {
-        band + (fullHeight - band) * reveal
     }
 
     var body: some View {
@@ -65,7 +59,7 @@ struct ExpandedIslandView: View {
             PanelView()
         }
         .frame(width: NotchWindowController.panelWidth,
-               height: displayHeight,
+               height: fullHeight,
                alignment: .top)
         .background(
             UnevenRoundedRectangle(
@@ -98,9 +92,6 @@ struct ExpandedIslandView: View {
                 style: .continuous
             )
         )
-        .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { reveal = 1 }
-        }
     }
 
     private var expandedHeader: some View {
@@ -141,14 +132,13 @@ struct NotificationIslandView: View {
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var notifications: NotificationStore
 
-    @State private var reveal: CGFloat = 0
     @State private var contentHeight: CGFloat = 120
 
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
     private var band: CGFloat { NotchScreenInfo.collapsedIslandHeight(on: screen) }
 
     private var displayHeight: CGFloat {
-        band + 4 + (contentHeight + 14) * reveal
+        band + 4 + contentHeight + 14
     }
 
     var body: some View {
@@ -187,9 +177,6 @@ struct NotificationIslandView: View {
             )
         )
         .clipped()
-        .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { reveal = 1 }
-        }
     }
 }
 
