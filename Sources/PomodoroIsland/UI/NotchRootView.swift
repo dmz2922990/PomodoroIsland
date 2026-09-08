@@ -132,14 +132,14 @@ struct NotificationIslandView: View {
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var notifications: NotificationStore
 
-    @State private var contentHeight: CGFloat = 120
-
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
     private var band: CGFloat { NotchScreenInfo.collapsedIslandHeight(on: screen) }
 
-    /// 探针值已包含卡片自身底部 padding，这里不再叠加
+    /// 探针值已包含卡片自身底部 padding，这里不再叠加。
+    /// 高度以 controller 的实测值为唯一事实源：collapse→expand 翻转会销毁重建本视图，
+    /// 若本地 @State 从 120 起步，窗口会先以矮高度渲染高卡片再靠探针修正（hook 连续卡片时必现截断）
     private var displayHeight: CGFloat {
-        band + 4 + contentHeight
+        band + 4 + controller.notificationContentHeight
     }
 
     var body: some View {
@@ -152,8 +152,6 @@ struct NotificationIslandView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
                     .background(HeightProbe(onChange: { h in
-                        guard h != contentHeight else { return }
-                        contentHeight = h
                         controller.notificationHeightChanged(h)
                     }))
             }

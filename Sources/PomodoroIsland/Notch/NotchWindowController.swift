@@ -137,8 +137,8 @@ final class NotchWindowController: ObservableObject {
     var peekCondition: (() -> Bool)?
     /// 悬停预览态：主岛向下垂降一行显示当前任务
     @Published private(set) var isPeeking = false
-    /// 通知内容实测高度（由视图上报）
-    private var notificationContentHeight: CGFloat = 300
+    /// 通知内容实测高度（由视图上报，跨卡片/翻转持久）
+    @Published private(set) var notificationContentHeight: CGFloat = 300
 
     /// 通知态 frame：刘海带 + 动态内容高度（与 NotificationIslandView.displayHeight 保持一致）
     private func notificationFrame() -> NSRect {
@@ -230,7 +230,9 @@ final class NotchWindowController: ObservableObject {
         window.ignoresMouseEvents = false
         window.staysInteractive = true
         mouseWatch.setClickTracking(false)
-        applyFrame(animated: true)
+        // 通知驱动的展开不做窗口动画：动画以 stale 高度为目标，高卡片会在动画期间
+        // 被 .clipped() 拦腰截断（hook 流程中卡片高度逐张变化，每次都会复现）
+        applyFrame(animated: hasPendingNotifications?() != true)
     }
 
     func collapse() {
