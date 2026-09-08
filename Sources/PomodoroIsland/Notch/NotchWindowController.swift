@@ -56,7 +56,13 @@ final class NotchWindowController: ObservableObject {
         let panel = NotchPanel(contentRect: expandedFrame())
         // 根视图内已 .ignoresSafeArea()：窗口整体位于屏幕安全区（刘海）内，
         // 若不忽略安全区，SwiftUI 会把岛屿往下推出一个刘海的高度
-        panel.contentView = NSHostingView(rootView: rootView)
+        let hosting = NSHostingView(rootView: rootView)
+        // 窗口尺寸由本控制器手动管理；禁用宿主视图自动更新窗口内容尺寸约束，
+        // 否则展开动画期间 intrinsic size 变化会与 setFrame 冲突导致崩溃
+        if #available(macOS 13.0, *) {
+            hosting.sizingOptions = []
+        }
+        panel.contentView = hosting
         panel.orderFrontRegardless()
         window = panel
 
