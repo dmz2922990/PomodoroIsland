@@ -62,6 +62,7 @@ struct ExpandedIslandView: View {
                height: fullHeight,
                alignment: .top)
         .background(
+            // 阴影挂在圆角形状自身（矩形裁剪会把圆角挖空处也投上阴影）
             UnevenRoundedRectangle(
                 topLeadingRadius: 0,
                 bottomLeadingRadius: 24,
@@ -80,9 +81,8 @@ struct ExpandedIslandView: View {
                 )
                 .strokeBorder(Theme.cardBorder, lineWidth: 0.5)
             )
+            .shadow(color: .black.opacity(0.4), radius: 14, y: 5)
         )
-        .clipped()
-        .shadow(color: .black.opacity(0.4), radius: 14, y: 5)
         .contentShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: 0,
