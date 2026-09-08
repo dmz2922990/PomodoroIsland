@@ -140,11 +140,10 @@ final class NotchWindowController: ObservableObject {
     /// 通知内容实测高度（由视图上报）
     private var notificationContentHeight: CGFloat = 300
 
-    /// 通知态 frame：刘海带 + 动态内容高度
+    /// 通知态 frame：刘海带 + 动态内容高度（与 NotificationIslandView.displayHeight 保持一致）
     private func notificationFrame() -> NSRect {
         let band = NotchScreenInfo.collapsedIslandHeight(on: screen)
-        // 探针已测入卡片内边距，这里只加少量缓冲
-        let height = band + notificationContentHeight + 6
+        let height = band + notificationContentHeight + 4
         let frame = screen.frame
         return NSRect(x: frame.midX - Self.panelWidth / 2,
                       y: frame.maxY - height,
@@ -207,7 +206,9 @@ final class NotchWindowController: ObservableObject {
         let clamped = max(90, height)
         guard abs(clamped - notificationContentHeight) > 1 else { return }
         notificationContentHeight = clamped
-        if isExpanded, hasPendingNotifications?() == true {
+        // 只要展开就应用：若额外要求"有待处理通知"，竞态窗口里跳过后探针不会再触发，
+        // 窗口会永远卡在旧高度（内容被裁切）。无通知时 currentFrame() 自然回到任务面板帧。
+        if isExpanded {
             applyFrame()
         }
     }

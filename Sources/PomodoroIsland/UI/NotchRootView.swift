@@ -137,8 +137,9 @@ struct NotificationIslandView: View {
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
     private var band: CGFloat { NotchScreenInfo.collapsedIslandHeight(on: screen) }
 
+    /// 探针值已包含卡片自身底部 padding，这里不再叠加
     private var displayHeight: CGFloat {
-        band + 4 + contentHeight + 14
+        band + 4 + contentHeight
     }
 
     var body: some View {
@@ -177,6 +178,8 @@ struct NotificationIslandView: View {
             )
         )
         .clipped()
+        // 高度不做弹簧动画：窗口 setFrame 是瞬时到位，视图高度若渐变会在切换瞬间被 .clipped() 拦腰截断
+        .animation(nil, value: displayHeight)
     }
 }
 
