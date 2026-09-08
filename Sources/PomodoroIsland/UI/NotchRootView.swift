@@ -11,16 +11,10 @@ struct NotchRootView: View {
             if controller.isExpanded {
                 if notifications.current != nil {
                     NotificationIslandView()
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
-                            removal: .opacity
-                        ))
+                        .transition(.opacity)
                 } else {
                     ExpandedIslandView()
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
-                            removal: .opacity
-                        ))
+                        .transition(.opacity)
                 }
             } else {
                 IslandStripView()
@@ -35,12 +29,14 @@ struct NotchRootView: View {
 }
 
 /// 展开态：头部（刘海下方延伸区）+ 任务面板融为一体的黑色岛屿，
-/// 顶部直角贴屏幕顶，仅底部圆角。
+/// 顶部直角贴屏幕顶，仅底部圆角。出现时高度从刘海带平滑生长。
 struct ExpandedIslandView: View {
 
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var engine: PomodoroEngine
     @EnvironmentObject private var store: TaskStore
+
+    @State private var reveal: CGFloat = 0
 
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
 
@@ -48,41 +44,63 @@ struct ExpandedIslandView: View {
         NotchScreenInfo.collapsedIslandHeight(on: screen)
     }
 
-    private var totalHeight: CGFloat {
+    private var fullHeight: CGFloat {
         band + NotchScreenInfo.expandedExtension + NotchWindowController.panelHeight
     }
 
-    private var shape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: 24,
-            bottomTrailingRadius: 24,
-            topTrailingRadius: 0,
-            style: .continuous
-        )
+    private var displayHeight: CGFloat {
+        band + (fullHeight - band) * reveal
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            shape
-                .fill(Theme.islandColor)
-                .overlay(shape.strokeBorder(Theme.cardBorder, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.4), radius: 14, y: 5)
+        VStack(spacing: 0) {
+            // 顶部带：与刘海同高的区域（中心被物理刘海遮挡），留空
+            Color.clear.frame(height: band + 6)
 
-            VStack(spacing: 0) {
-                // 顶部带：与刘海同高的区域（中心被物理刘海遮挡），留空
-                Color.clear.frame(height: band + 6)
+            expandedHeader
+                .frame(height: NotchScreenInfo.expandedExtension - 6)
+                .contentShape(Rectangle())
+                .onTapGesture { controller.collapse() }
 
-                expandedHeader
-                    .frame(height: NotchScreenInfo.expandedExtension - 6)
-                    .contentShape(Rectangle())
-                    .onTapGesture { controller.collapse() }
-
-                PanelView()
-            }
+            PanelView()
         }
-        .frame(width: NotchWindowController.panelWidth, height: totalHeight)
-        .contentShape(shape)
+        .frame(width: NotchWindowController.panelWidth,
+               height: displayHeight,
+               alignment: .top)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 0,
+                bottomLeadingRadius: 24,
+                bottomTrailingRadius: 24,
+                topTrailingRadius: 0,
+                style: .continuous
+            )
+            .fill(Theme.islandColor)
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 24,
+                    bottomTrailingRadius: 24,
+                    topTrailingRadius: 0,
+                    style: .continuous
+                )
+                .strokeBorder(Theme.cardBorder, lineWidth: 0.5)
+            )
+        )
+        .clipped()
+        .shadow(color: .black.opacity(0.4), radius: 14, y: 5)
+        .contentShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 0,
+                bottomLeadingRadius: 24,
+                bottomTrailingRadius: 24,
+                topTrailingRadius: 0,
+                style: .continuous
+            )
+        )
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { reveal = 1 }
+        }
     }
 
     private var expandedHeader: some View {
@@ -123,38 +141,55 @@ struct NotificationIslandView: View {
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var notifications: NotificationStore
 
+    @State private var reveal: CGFloat = 0
+    @State private var contentHeight: CGFloat = 120
+
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
     private var band: CGFloat { NotchScreenInfo.collapsedIslandHeight(on: screen) }
 
-    private var shape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 0, bottomLeadingRadius: 20,
-            bottomTrailingRadius: 20, topTrailingRadius: 0,
-            style: .continuous
-        )
+    private var displayHeight: CGFloat {
+        band + 4 + (contentHeight + 14) * reveal
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            shape
-                .fill(Theme.islandColor)
-                .overlay(shape.stroke(Theme.cardBorder, lineWidth: 0.5))
+        VStack(spacing: 0) {
+            // 刘海带（物理刘海不可见区）
+            Color.clear.frame(height: band + 4)
 
-            VStack(spacing: 0) {
-                // 刘海带（物理刘海不可见区）
-                Color.clear.frame(height: band + 4)
-
-                if let n = notifications.current {
-                    NotificationCardView(notification: n, store: notifications)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 14)
-                        .background(HeightProbe(onChange: { h in
-                            controller.notificationHeightChanged(h)
-                        }))
-                }
+            if let n = notifications.current {
+                NotificationCardView(notification: n, store: notifications)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                    .background(HeightProbe(onChange: { h in
+                        guard h != contentHeight else { return }
+                        contentHeight = h
+                        controller.notificationHeightChanged(h)
+                    }))
             }
         }
-        .frame(width: NotchWindowController.panelWidth)
+        .frame(width: NotchWindowController.panelWidth,
+               height: displayHeight,
+               alignment: .top)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 0, bottomLeadingRadius: 20,
+                bottomTrailingRadius: 20, topTrailingRadius: 0,
+                style: .continuous
+            )
+            .fill(Theme.islandColor)
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0, bottomLeadingRadius: 20,
+                    bottomTrailingRadius: 20, topTrailingRadius: 0,
+                    style: .continuous
+                )
+                .strokeBorder(Theme.cardBorder, lineWidth: 0.5)
+            )
+        )
+        .clipped()
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { reveal = 1 }
+        }
     }
 }
 
