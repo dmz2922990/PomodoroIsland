@@ -40,7 +40,9 @@ swift run
 
 ## MCP 服务（AI 接入）
 
-应用内嵌 MCP 服务（Streamable HTTP），接入的 AI（ZCode / Claude 等）可以直接增删改查任务、读取计时状态，界面实时同步。
+应用内嵌 MCP 服务（Streamable HTTP），接入的 AI（ZCode / Claude 等）可以直接增删改查任务、发送通知与交互提问、读取计时状态，界面实时同步。
+
+📘 **详细使用方法与全部工具示例见 [docs/MCP.md](docs/MCP.md)**。
 
 **接入**：设置页打开「MCP 服务」，复制地址，在 MCP 客户端配置中添加：
 
