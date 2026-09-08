@@ -59,6 +59,12 @@ swift run
 
 说明：仅监听本机 127.0.0.1；通过 MCP 完成当前任务同样会自动停止进行中的专注；新任务进入未完成列表末尾。
 
+## Agent Hooks（事件接入）
+
+除 MCP 外，ZCode 的 `Stop` / `PermissionRequest` / `AskUserQuestion` 事件也可接入岛屿：任务完成弹通知、权限请求在岛屿上「允许 / 拒绝」、AI 提问直接在岛屿上作答（超时自动回落 ZCode 默认 UI，不会卡会话）。
+
+📘 **配置方法与原理见 [docs/HOOKS.md](docs/HOOKS.md)**，脚本源码在 [`hook-script/`](hook-script/)。
+
 ## 说明
 
 交互与视觉思路参考了开源社区"刘海岛屿"类应用（如 CodeIsland、boring.notch 等）的通用做法，代码为独立实现，未复用任何第三方代码。
