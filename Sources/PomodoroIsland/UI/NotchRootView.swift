@@ -265,11 +265,20 @@ private struct PassiveNotificationRow: View {
                 .fill(sourceDotColor(notification.source))
                 .frame(width: 7, height: 7)
 
-            Text(notification.title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            // 标题 + 补充信息（如 hook 通知里的 session 名称）同行展示，尾部截断保标题
+            Group {
+                Text(notification.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                if !notification.message.isEmpty {
+                    Text(" · \(notification.message)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .layoutPriority(1)
 
             Spacer(minLength: 8)
 
