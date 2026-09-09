@@ -211,7 +211,9 @@ final class NotchWindowController: ObservableObject {
 
     /// 通知内容高度变化（视图测量上报）
     func notificationHeightChanged(_ height: CGFloat) {
-        let clamped = max(90, height)
+        // 下限 = 单条被动紧凑行的高度（30pt 行 + 上下 padding），防止退化为一条细缝；
+        // 纯被动堆叠（无问题卡）时岛屿随之收紧，不再留大片空白
+        let clamped = max(50, height)
         guard abs(clamped - notificationContentHeight) > 1 else { return }
         notificationContentHeight = clamped
         // 只要展开就应用：若额外要求"有待处理通知"，竞态窗口里跳过后探针不会再触发，
