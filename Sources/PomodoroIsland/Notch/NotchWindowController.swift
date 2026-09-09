@@ -139,6 +139,14 @@ final class NotchWindowController: ObservableObject {
     @Published private(set) var isPeeking = false
     /// 通知内容实测高度（由视图上报，跨卡片/翻转持久）
     @Published private(set) var notificationContentHeight: CGFloat = 300
+    /// 各交互卡片的实测高度（id → height），堆叠视图上报，用于屏高溢出保护的单遍决策
+    @Published var cardHeights: [UUID: CGFloat] = [:]
+
+    /// 卡片高度上报（堆叠视图逐卡测量）
+    func cardHeightMeasured(_ id: UUID, _ height: CGFloat) {
+        guard abs((cardHeights[id] ?? -1) - height) > 1 else { return }
+        cardHeights[id] = height
+    }
 
     /// 通知态 frame：刘海带 + 动态内容高度（与 NotificationIslandView.displayHeight 保持一致）
     private func notificationFrame() -> NSRect {

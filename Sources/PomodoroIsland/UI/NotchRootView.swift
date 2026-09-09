@@ -24,7 +24,7 @@ struct NotchRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: controller.isExpanded)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: notifications.current?.id)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: notifications.pending.map(\.id))
     }
 }
 
@@ -126,7 +126,7 @@ struct ExpandedIslandView: View {
     }
 }
 
-/// 通知岛：刘海带 + 通知内容，高度随内容自适应，仅展示通知本身
+/// 通知岛：刘海带 + 卡片堆叠（多 agent 并发时全部可见），高度随内容自适应
 struct NotificationIslandView: View {
 
     @EnvironmentObject private var controller: NotchWindowController
@@ -135,9 +135,61 @@ struct NotificationIslandView: View {
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
     private var band: CGFloat { NotchScreenInfo.collapsedIslandHeight(on: screen) }
 
-    /// 探针值已包含卡片自身底部 padding，这里不再叠加。
-    /// 高度以 controller 的实测值为唯一事实源：collapse→expand 翻转会销毁重建本视图，
-    /// 若本地 @State 从 120 起步，窗口会先以矮高度渲染高卡片再靠探针修正（hook 连续卡片时必现截断）
+    /// 紧凑行（被动通知 / 溢出聚合行）的固定高度
+    private static let compactRowHeight: CGFloat = 34
+    /// 卡片间距
+    private static let cardSpacing: CGFloat = 8
+    /// 交互卡未实测前的估算高度
+    private static let estimatedCardHeight: CGFloat = 300
+
+    /// 堆叠可用高度预算（屏幕可视高扣除刘海带与底部边距）
+    private var heightBudget: CGFloat {
+        max(200, screen.visibleFrame.height - band - 24)
+    }
+
+    /// 渲染块：完整交互卡 / 被动紧凑行 / 溢出聚合行（放不下的卡片合并为一行）
+    private enum StackBlock: Identifiable {
+        case card(IslandNotification)
+        case passiveRow(IslandNotification)
+        case overflow([IslandNotification])
+
+        var id: UUID {
+            switch self {
+            case .card(let n): return n.id
+            case .passiveRow(let n): return n.id
+            case .overflow(let list): return list.first?.id ?? UUID()
+            }
+        }
+    }
+
+    /// 单遍确定性决策：从上往下累计高度，放不下的卡片及以下全部折叠为一行「+N 排队」。
+    /// 首块始终渲染（避免全部折叠的退化态）。交互卡只以完整形态渲染（保持其内部状态），
+    /// 卡片高度用实测值（未实测时用估算，下一帧探针修正）。
+    private var blocks: [StackBlock] {
+        let order = notifications.displayOrder
+        var result: [StackBlock] = []
+        var used: CGFloat = 0
+        var overflowed: [IslandNotification] = []
+
+        for n in order {
+            if !overflowed.isEmpty { overflowed.append(n); continue }
+            let h = n.isInteractive
+                ? (controller.cardHeights[n.id] ?? Self.estimatedCardHeight)
+                : Self.compactRowHeight
+            let isFirst = result.isEmpty
+            if !isFirst, used + Self.cardSpacing + h > heightBudget {
+                overflowed.append(n)
+                continue
+            }
+            used += (isFirst ? 0 : Self.cardSpacing) + h
+            result.append(n.isInteractive ? .card(n) : .passiveRow(n))
+        }
+        if !overflowed.isEmpty {
+            result.append(.overflow(overflowed))
+        }
+        return result
+    }
+
     private var displayHeight: CGFloat {
         band + 4 + controller.notificationContentHeight
     }
@@ -147,14 +199,35 @@ struct NotificationIslandView: View {
             // 刘海带（物理刘海不可见区）
             Color.clear.frame(height: band + 4)
 
-            if let n = notifications.current {
-                NotificationCardView(notification: n, store: notifications)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 14)
-                    .background(HeightProbe(onChange: { h in
-                        controller.notificationHeightChanged(h)
-                    }))
+            VStack(alignment: .leading, spacing: Self.cardSpacing) {
+                ForEach(blocks) { block in
+                    switch block {
+                    case .card(let n):
+                        NotificationCardView(notification: n, store: notifications)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                // 每张问题卡用橘黄色圆角边框包裹
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(Color.orange, lineWidth: 1.2)
+                            )
+                            .background(HeightProbe(onChange: { h in
+                                controller.cardHeightMeasured(n.id, h)
+                            }))
+                    case .passiveRow(let n):
+                        PassiveNotificationRow(notification: n, store: notifications)
+                    case .overflow(let list):
+                        OverflowRow(count: list.count,
+                                    first: list.first.map { "\($0.source) · \($0.title)" })
+                    }
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 14)
+            .background(HeightProbe(onChange: { h in
+                controller.notificationHeightChanged(h)
+            }))
         }
         .frame(width: NotchWindowController.panelWidth,
                height: displayHeight,
@@ -179,6 +252,90 @@ struct NotificationIslandView: View {
         // 高度不做弹簧动画：窗口 setFrame 是瞬时到位，视图高度若渐变会在切换瞬间被 .clipped() 拦腰截断
         .animation(nil, value: displayHeight)
     }
+}
+
+/// 被动通知紧凑行：来源点 + 标题（截断）+ 提前关闭；数秒后自动消失
+private struct PassiveNotificationRow: View {
+    let notification: IslandNotification
+    let store: NotificationStore
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(sourceDotColor(notification.source))
+                .frame(width: 7, height: 7)
+
+            Text(notification.title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 8)
+
+            Text(notification.source)
+                .font(.system(size: 9.5))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+
+            Button {
+                store.respond(notification.id, NotificationResponse(status: "dismissed"))
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("忽略")
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+    }
+}
+
+/// 溢出聚合行：屏高放不下的卡片合并显示
+private struct OverflowRow: View {
+    let count: Int
+    let first: String?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "tray.full")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textTertiary)
+            Text("还有 \(count) 条排队中")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+            if let first {
+                Text(first)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.03))
+        )
+    }
+}
+
+/// 来源名哈希 → 稳定配色（与 NotificationCardView.sourceColor 同规则）
+private func sourceDotColor(_ name: String) -> Color {
+    var hash = 0
+    for b in name.utf8 { hash = (hash &* 31 + Int(b)) & 0xFF }
+    return Color(hue: Double(hash) / 255.0, saturation: 0.65, brightness: 0.85)
 }
 
 /// 内容高度探测器

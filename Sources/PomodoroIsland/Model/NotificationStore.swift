@@ -110,6 +110,14 @@ final class NotificationStore: ObservableObject {
     var current: IslandNotification? { pending.first }
     var interactivePendingCount: Int { pending.filter { $0.isInteractive }.count }
 
+    /// 岛屿堆叠展示顺序：交互式先到在前（超时公平），被动式新的紧跟其后
+    /// （旧的在底部、即将自动消失）。pending 数组本身保持新者在前不变。
+    var displayOrder: [IslandNotification] {
+        let interactive = pending.filter { $0.isInteractive }.sorted { $0.creation < $1.creation }
+        let passive = pending.filter { !$0.isInteractive }.sorted { $0.creation > $1.creation }
+        return interactive + passive
+    }
+
     // MARK: - 提交（MCPServer 调用，主线程）
 
     @discardableResult
