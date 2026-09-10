@@ -321,7 +321,9 @@ final class NotchWindowController: ObservableObject {
 
     private func repositionForScreenChange() {
         screen = NotchScreenInfo.preferredScreen()
-        window?.setFrame(expandedFrame(), display: true)
+        isPeeking = false                       // 屏幕几何已变，预览态作废
+        objectWillChange.send()                 // 触发视图按新屏幕重算带高
+        window?.setFrame(currentFrame(), display: true)
     }
 }
 
