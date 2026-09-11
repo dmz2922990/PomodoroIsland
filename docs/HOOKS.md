@@ -55,6 +55,8 @@
 - 阻塞模式读取 hook 事件的 stdin JSON（`tool_name` / `tool_input` / `reason` 等），转成 MCP `ask_user` 调用；需要系统安装 `python3`
 - `permission-request` → `type=buttons`（允许/拒绝），返回 `hookSpecificOutput.decision`
 - `ask-user-question` → 每题一次 `type=choice`（选项 label + description 作详情；单选附自定义输入），返回 `hookSpecificOutput.updatedInput`（原 questions + answers）并 `permissionDecision: allow`
+- **多 session 兼容**：来源身份为 `agent·会话名`（自动反查会话标题），岛屿卡片可分辨来自哪个会话，且各会话的并发上限分别计数
+- **回落窗口**：权限等待 30 秒、每题 25 秒——超时未答自动回落 ZCode 原生 UI，不会长时间冻结会话（`POMODORO_ISLAND_ASK_TIMEOUT` 可覆盖）
 - 日志：`/tmp/pomodoroIsland-notify.log`
 - 调试环境变量：`POMODORO_ISLAND_ASK_TIMEOUT`（覆盖岛屿等待秒数）、`POMODORO_ISLAND_MCP_URL`（覆盖 MCP 地址）
 

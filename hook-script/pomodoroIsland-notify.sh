@@ -38,6 +38,7 @@ case "$MODE" in
     trap 'rm -f "$input_file"' EXIT
     cat > "$input_file" 2>/dev/null
     AGENT="$AGENT" MODE="$MODE" MCP_URL="$MCP_URL" INPUT_FILE="$input_file" \
+    SESSION_TITLE="$(session_title)" \
     ASK_TIMEOUT="${POMODORO_ISLAND_ASK_TIMEOUT:-}" \
     python3 <<'PYEOF'
 import json, os, sys, urllib.request
@@ -45,13 +46,17 @@ import json, os, sys, urllib.request
 AGENT = os.environ["AGENT"]
 MODE = os.environ["MODE"]
 MCP_URL = os.environ["MCP_URL"]
-ASK_TIMEOUT = int(os.environ["ASK_TIMEOUT"]) if os.environ.get("ASK_TIMEOUT") else (120 if MODE == "permission-request" else 90)
+# 多 session/多 agent 并发时用「agent·会话名」作来源身份：岛屿上可分辨来源，
+# 且单来源并发上限按会话分别计数（App 侧交互卡上限：全局 8 / 单来源 4）
+SESSION = os.environ.get("SESSION_TITLE", "")[:16]
+SOURCE = f"{AGENT}·{SESSION}" if SESSION else AGENT
+ASK_TIMEOUT = int(os.environ["ASK_TIMEOUT"]) if os.environ.get("ASK_TIMEOUT") else (30 if MODE == "permission-request" else 25)
 
 def mcp_ask_user(args, island_timeout):
     """调用 MCP ask_user（阻塞到用户响应或岛屿超时）。返回响应 dict；任何失败抛异常。"""
     payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                           "params": {"name": "ask_user",
-                                     "arguments": dict(args, timeoutSeconds=island_timeout, source=AGENT)}},
+                                     "arguments": dict(args, timeoutSeconds=island_timeout, source=SOURCE)}},
                          ensure_ascii=False)
     req = urllib.request.Request(MCP_URL, data=payload.encode("utf-8"),
                                  headers={"Content-Type": "application/json"}, method="POST")

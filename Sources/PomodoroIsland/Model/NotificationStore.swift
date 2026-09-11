@@ -83,9 +83,9 @@ final class NotificationStore: ObservableObject {
     @Published var pending: [IslandNotification] = []   // index 0 = 最新
     @Published private(set) var history: [IslandNotification] = []
 
-    static let maxInteractiveTotal = 3
-    static let maxInteractivePerSource = 2
-    static let maxPassiveTotal = 5
+    static let maxInteractiveTotal = 8
+    static let maxInteractivePerSource = 4
+    static let maxPassiveTotal = 8
     static let maxHistory = 20
 
     /// 到达提示音（由设置同步）
