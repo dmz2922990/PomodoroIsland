@@ -87,15 +87,13 @@ def permission_mode():
         hook = json.load(f)
     tool = hook.get("tool_name") or hook.get("toolName") or "?"
     tin = hook.get("tool_input") or hook.get("toolInput") or {}
+    # AskUserQuestion 不在此弹权限卡：提问环节（ask-user-question 模式）已让用户在岛屿作答过，
+    # 用户关闭提问卡 = 放弃岛屿应答，此处回落 zcode 原生流程（原生权限 + 原生提问 UI），
+    # 避免同一工具调用在岛上被打断两次
+    if tool == "AskUserQuestion":
+        return
     reason = hook.get("reason") or "该操作需要你的确认"
-    summary = ""
-    if isinstance(tin, dict):
-        for k in ("command", "file_path", "path", "pattern", "url", "query", "prompt"):
-            if isinstance(tin.get(k), str) and tin[k].strip():
-                summary = tin[k]
-                break
-        if not summary:
-            summary = json.dumps(tin, ensure_ascii=False)
+    summary = summarize_input(tin)
     message = truncate(f"{tool}：{reason}", 160)
     if summary:
         message += "\n" + truncate(summary, 120)
@@ -110,6 +108,22 @@ def permission_mode():
         emit({"hookSpecificOutput": {"hookEventName": "PermissionRequest",
                                      "decision": {"behavior": "deny",
                                                   "message": "用户在 PomodoroIsland 岛屿上拒绝了该操作"}}})
+
+
+def summarize_input(tin):
+    """权限卡摘要：优先取可读键；AskUserQuestion 类输入汇总问题文本而不是倾倒原始 JSON"""
+    if not isinstance(tin, dict):
+        return ""
+    qs = tin.get("questions")
+    if isinstance(qs, list) and qs:
+        texts = "／".join(str(q.get("question", "")) for q in qs
+                          if isinstance(q, dict) and q.get("question"))
+        if texts:
+            return f"{len(qs)} 个问题：{texts}"
+    for k in ("command", "file_path", "path", "pattern", "url", "query", "prompt"):
+        if isinstance(tin.get(k), str) and tin[k].strip():
+            return tin[k]
+    return json.dumps(tin, ensure_ascii=False)
 
 def ask_user_question_mode():
     with open(os.environ["INPUT_FILE"]) as f:
