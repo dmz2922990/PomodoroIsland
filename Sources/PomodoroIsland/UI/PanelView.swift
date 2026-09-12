@@ -1,11 +1,12 @@
 import SwiftUI
 import AppKit
+import Charts
 import UniformTypeIdentifiers
 
 /// 任务列表分页
 /// 面板页面
 private enum PanelPage {
-    case main, settings, notifications
+    case main, settings, notifications, stats
 }
 
 private enum TaskTab {
@@ -41,6 +42,9 @@ struct PanelView: View {
         VStack(spacing: 0) {
             if page == .settings {
                 SettingsPage()
+                    .transition(.opacity)
+            } else if page == .stats {
+                StatsPage()
                     .transition(.opacity)
             } else if page == .notifications {
                 NotificationHistoryPage()
@@ -968,5 +972,277 @@ private struct NotificationHistoryPage: View {
         let df = RelativeDateTimeFormatter()
         df.locale = Locale(identifier: "zh_CN")
         return df.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - 统计页（图表 + 任务排行 + 数据导出）
+
+private struct StatsPage: View {
+
+    @EnvironmentObject private var store: TaskStore
+    @State private var range: Int = 7   // 7 / 14 / 30 天
+    @State private var exportDone = false
+
+    private var accent: Color { Theme.accent(for: .focus) }
+    private var green: Color { Color(red: 0.35, green: 0.78, blue: 0.44) }
+
+    private var stats: [TaskStore.DailyStat] { store.dailyStats(days: range) }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                HStack(spacing: 4) {
+                    CapsuleSegmentButton(title: "7 天", selected: range == 7) {
+                        withAnimation(.easeInOut(duration: 0.15)) { range = 7 }
+                    }
+                    CapsuleSegmentButton(title: "14 天", selected: range == 14) {
+                        withAnimation(.easeInOut(duration: 0.15)) { range = 14 }
+                    }
+                    CapsuleSegmentButton(title: "30 天", selected: range == 30) {
+                        withAnimation(.easeInOut(duration: 0.15)) { range = 30 }
+                    }
+                    Spacer()
+                    exportButton
+                }
+                .padding(.top, 2)
+
+                summaryCards
+
+                chartCard
+
+                rankingCard
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .animation(.easeInOut(duration: 0.15), value: range)
+    }
+
+    // MARK: - 概要卡片
+
+    private var summaryCards: some View {
+        let total = stats.reduce(0) { $0 + $1.count }
+        let rate = store.onTimeRate(days: range)
+        return HStack(spacing: 8) {
+            summaryCard(value: "\(store.todayFocusCount)", label: "今日番茄")
+            summaryCard(value: rate.map { String(Int(($0 * 100).rounded())) + "%" } ?? "--",
+                        label: "按时率(\(range)天)", valueColor: rate.map { $0 >= 0.8 ? green : .white } ?? nil)
+            summaryCard(value: "\(total)", label: "期间总计")
+        }
+    }
+
+    private func summaryCard(value: String, label: String, valueColor: Color? = nil) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(valueColor ?? Theme.textPrimary)
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    // MARK: - 柱状图（Swift Charts）
+
+    private var chartCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            cardTitle("每日番茄")
+            Chart(stats) { stat in
+                BarMark(
+                    x: .value("日期", stat.date, unit: .day),
+                    y: .value("番茄", stat.count),
+                    width: .fixed(range == 7 ? 18 : 10)
+                )
+                .foregroundStyle(accent.opacity(0.85))
+                .cornerRadius(3)
+
+                BarMark(
+                    x: .value("日期", stat.date, unit: .day),
+                    y: .value("按时", stat.onTimeCount),
+                    width: .fixed(range == 7 ? 8 : 4)
+                )
+                .foregroundStyle(green)
+                .position(by: .value("日期", stat.date))
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day)) { _ in
+                    AxisValueLabel(format: .dateTime.day(), centered: true)
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { _ in
+                    AxisGridLine().foregroundStyle(Color.white.opacity(0.08))
+                    AxisValueLabel().foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .chartPlotStyle { plot in
+                plot.background(Color.white.opacity(0.03))
+            }
+            .frame(height: 130)
+
+            HStack(spacing: 10) {
+                legendDot(accent.opacity(0.85), "全部番茄")
+                legendDot(green, "按时完成")
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func legendDot(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.system(size: 9)).foregroundStyle(Theme.textTertiary)
+        }
+    }
+
+    // MARK: - 任务排行
+
+    @ViewBuilder
+    private var rankingCard: some View {
+        let ranking = store.taskRanking(limit: 5)
+        VStack(alignment: .leading, spacing: 8) {
+            cardTitle("任务排行 · Top \(ranking.count)")
+            if ranking.isEmpty {
+                Text("还没有完成过番茄")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textTertiary)
+            } else {
+                let maxPomos = max(1, ranking.first?.pomosDone ?? 1)
+                ForEach(ranking) { r in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(r.title)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineLimit(1)
+                            if r.isDone {
+                                Text("已完成")
+                                    .font(.system(size: 8.5, weight: .semibold))
+                                    .foregroundStyle(green)
+                            }
+                            Spacer()
+                            Text(r.planned.map { "🍅 \(r.pomosDone)/\($0)" } ?? "🍅 \(r.pomosDone)")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.white.opacity(0.06))
+                                Capsule()
+                                    .fill(accent.opacity(0.75))
+                                    .frame(width: max(4, geo.size.width * CGFloat(r.pomosDone) / CGFloat(maxPomos)))
+                            }
+                        }
+                        .frame(height: 4)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func cardTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(Theme.textSecondary)
+    }
+
+    // MARK: - 导出 CSV
+
+    private var exportButton: some View {
+        Button {
+            exportCSV()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: exportDone ? "checkmark" : "square.and.arrow.up")
+                    .font(.system(size: 9, weight: .semibold))
+                Text(exportDone ? "已导出" : "导出")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(exportDone ? green : Theme.textSecondary)
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("导出任务与番茄记录（CSV）")
+    }
+
+    private func exportCSV() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let nameDf = DateFormatter()
+        nameDf.dateFormat = "yyyyMMdd"
+        panel.nameFieldStringValue = "PomodoroIsland-\(nameDf.string(from: Date())).csv"
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let outDf = DateFormatter()
+        outDf.dateFormat = "yyyy-MM-dd HH:mm"
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "zh_CN")
+
+        var lines: [String] = []
+        lines.append("== 任务 ==")
+        lines.append("标题,是否完成,已完成番茄,计划番茄,创建时间,完成时间")
+        for t in store.tasks {
+            lines.append([
+                csvField(t.title),
+                t.isDone ? "是" : "否",
+                "\(t.pomosDone)",
+                t.pomosPlanned.map { "\($0)" } ?? "",
+                outDf.string(from: t.createdAt),
+                t.finishedAt.map { outDf.string(from: $0) } ?? ""
+            ].joined(separator: ","))
+        }
+        lines.append("")
+        lines.append("== 番茄记录 ==")
+        lines.append("时间,是否按时,关联任务")
+        let titleById = Dictionary(uniqueKeysWithValues: store.tasks.map { ($0.id, $0.title) })
+        for e in store.focusLog {
+            let taskName = e.taskId.flatMap { titleById[$0] } ?? "-"
+            lines.append([
+                outDf.string(from: e.date),
+                e.onTime ? "按时" : "超时",
+                csvField(taskName)
+            ].joined(separator: ","))
+        }
+
+        var csv = lines.joined(separator: "\n")
+        csv += "\n"
+        var data = Data([0xEF, 0xBB, 0xBF])   // UTF-8 BOM，Excel 直开不乱码
+        data.append(Data(csv.utf8))
+        try? data.write(to: url, options: .atomic)
+
+        exportDone = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { exportDone = false }
+    }
+
+    private func csvField(_ text: String) -> String {
+        if text.contains(",") || text.contains("\"") || text.contains("\n") {
+            return "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return text
     }
 }

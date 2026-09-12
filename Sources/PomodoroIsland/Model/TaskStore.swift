@@ -62,6 +62,8 @@ struct FocusEntry: Codable, Equatable {
     var date: Date
     /// 是否按时完成（超时腐烂的不计入轮次）
     var onTime: Bool
+    /// 完成时关联的任务（旧格式数据为 nil）
+    var taskId: UUID?
 }
 
 /// 任务与设置的全局存储（JSON 持久化到 Application Support）
@@ -89,6 +91,59 @@ final class TaskStore: ObservableObject {
     var todayOnTimeCount: Int {
         let cal = Calendar.current
         return focusLog.filter { cal.isDateInToday($0.date) && $0.onTime }.count
+    }
+
+    // MARK: - 统计（供统计页与导出）
+
+    struct DailyStat: Identifiable, Equatable {
+        let id: Date
+        let date: Date
+        let count: Int
+        let onTimeCount: Int
+    }
+
+    /// 近 N 天逐日番茄统计（含今天，缺数日补零）
+    func dailyStats(days: Int) -> [DailyStat] {
+        let cal = Calendar.current
+        let startOfToday = cal.startOfDay(for: Date())
+        var result: [DailyStat] = []
+        for offset in stride(from: days - 1, through: 0, by: -1) {
+            guard let day = cal.date(byAdding: .day, value: -offset, to: startOfToday) else { continue }
+            let next = cal.date(byAdding: .day, value: 1, to: day)!
+            let entries = focusLog.filter { $0.date >= day && $0.date < next }
+            result.append(DailyStat(
+                id: day, date: day,
+                count: entries.count,
+                onTimeCount: entries.filter { $0.onTime }.count
+            ))
+        }
+        return result
+    }
+
+    /// 近 N 天按时完成率（0-1，无记录返回 nil）
+    func onTimeRate(days: Int) -> Double? {
+        let cal = Calendar.current
+        let start = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: Date()))!
+        let entries = focusLog.filter { $0.date >= start }
+        guard !entries.isEmpty else { return nil }
+        return Double(entries.filter { $0.onTime }.count) / Double(entries.count)
+    }
+
+    struct TaskRank: Identifiable {
+        let id: UUID
+        let title: String
+        let pomosDone: Int
+        let planned: Int?
+        let isDone: Bool
+    }
+
+    /// 任务番茄排行（按已完成数降序）
+    func taskRanking(limit: Int = 5) -> [TaskRank] {
+        tasks
+            .filter { $0.pomosDone > 0 }
+            .sorted { $0.pomosDone > $1.pomosDone }
+            .prefix(limit)
+            .map { TaskRank(id: $0.id, title: $0.title, pomosDone: $0.pomosDone, planned: $0.pomosPlanned, isDone: $0.isDone) }
     }
 
     var currentTask: TaskItem? {
@@ -189,7 +244,7 @@ final class TaskStore: ObservableObject {
         if let taskId = taskId, let idx = tasks.firstIndex(where: { $0.id == taskId }) {
             tasks[idx].pomosDone += 1
         }
-        focusLog.append(FocusEntry(date: Date(), onTime: onTime))
+        focusLog.append(FocusEntry(date: Date(), onTime: onTime, taskId: taskId))
         // 防止无限增长
         let cal = Calendar.current
         focusLog.removeAll { cal.date(byAdding: .day, value: -60, to: Date())! > $0.date }

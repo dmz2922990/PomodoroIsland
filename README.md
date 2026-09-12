@@ -38,6 +38,10 @@ swift run
 
 任务与设置持久化在 `~/Library/Application Support/PomodoroIsland/store.json`。
 
+## 任务统计与导出
+
+展开岛屿 → 底栏 **图表图标** 进入统计页：今日番茄 / 按时率概要、近 7/14/30 天每日番茄柱状图（按时部分绿色区分）、任务番茄排行 Top 5。右上角「导出」可将任务与番茄记录保存为 CSV（UTF-8 BOM，Excel 直开）。
+
 ## MCP 服务（AI 接入）
 
 应用内嵌 MCP 服务（Streamable HTTP），接入的 AI（ZCode / Claude 等）可以直接增删改查任务、发送通知与交互提问、读取计时状态，界面实时同步。
