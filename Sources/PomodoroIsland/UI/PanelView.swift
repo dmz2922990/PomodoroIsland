@@ -333,6 +333,15 @@ struct PanelView: View {
             Spacer()
 
             IconButton(
+                system: page == .stats ? "chart.bar.fill" : "chart.bar",
+                help: page == .stats ? "返回" : "统计"
+            ) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    page = page == .stats ? .main : .stats
+                }
+            }
+
+            IconButton(
                 system: page == .settings ? "gearshape.fill" : "gearshape",
                 help: page == .settings ? "返回" : "设置"
             ) {
