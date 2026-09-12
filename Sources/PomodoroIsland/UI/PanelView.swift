@@ -622,6 +622,8 @@ struct TaskRow: View {
     @State private var isEditing = false
     @State private var editText = ""
     @FocusState private var renameFieldFocused: Bool
+    @State private var confirmingDelete = false
+    @State private var deleteConfirmWork: DispatchWorkItem?
     let isCurrent: Bool
     let isHovered: Bool
     let onHover: (Bool) -> Void
@@ -706,15 +708,38 @@ struct TaskRow: View {
                 .help("修改任务（双击标题也可以）")
                 .transition(.opacity)
 
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(Color.white.opacity(0.12)))
-                        .contentShape(Circle())
+                Button {
+                    if confirmingDelete {
+                        deleteConfirmWork?.cancel()
+                        onDelete()
+                    } else {
+                        confirmingDelete = true
+                        let work = DispatchWorkItem { confirmingDelete = false }
+                        deleteConfirmWork = work
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+                    }
+                } label: {
+                    Group {
+                        if confirmingDelete {
+                            Text("删除?")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .frame(height: 20)
+                                .background(Capsule().fill(Color(red: 0.92, green: 0.32, blue: 0.30)))
+                        } else {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Theme.textSecondary)
+                                .frame(width: 20, height: 20)
+                                .background(Circle().fill(Color.white.opacity(0.12)))
+                                .contentShape(Circle())
+                        }
+                    }
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.15), value: confirmingDelete)
                 .transition(.opacity)
             }
         }
