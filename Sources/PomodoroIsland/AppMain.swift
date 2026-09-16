@@ -72,19 +72,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - MCP 服务
 
-    /// 按设置启停 MCP 服务（端口变化时自动重建）
+    /// 按设置启停 MCP 服务（端口/局域网开关变化时自动重建）
     private func syncMCPServer() {
         let wanted = store.settings.mcpEnabled
         let port = UInt16(clamping: store.settings.mcpPort)
+        let allowLan = store.settings.mcpAllowLan
         if !wanted {
             mcpServer?.stop()
             mcpServer = nil
             store.mcpStatusText = "已关闭"
             return
         }
-        if let s = mcpServer, s.port == port { return }  // 已按相同端口运行
+        if let s = mcpServer, s.port == port, s.allowLan == allowLan { return }  // 配置未变
         mcpServer?.stop()
-        let server = MCPServer(store: store, engine: engine, notifications: notifications, port: port)
+        let server = MCPServer(store: store, engine: engine, notifications: notifications,
+                               port: port, allowLan: allowLan)
         server.onStateChange = { [weak self] _, message in
             self?.store.mcpStatusText = message
         }

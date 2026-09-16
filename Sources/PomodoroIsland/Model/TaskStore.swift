@@ -28,6 +28,8 @@ struct AppSettings: Codable, Equatable {
     var mcpEnabled: Bool = true
     /// MCP 监听端口
     var mcpPort: Int = 9527
+    /// 允许局域网访问 MCP（监听 0.0.0.0；默认仅本机 127.0.0.1。服务无鉴权，仅在可信网络开启）
+    var mcpAllowLan: Bool = false
     /// 通知服务开关（供 AI 发通知/提问，岛屿展示并可交互）
     var notifyEnabled: Bool = true
     /// 通知到达时自动弹出岛屿
@@ -37,7 +39,7 @@ struct AppSettings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case focusMinutes, shortBreakMinutes, longBreakMinutes, longBreakEvery
-        case autoStartBreak, soundOn, mcpEnabled, mcpPort
+        case autoStartBreak, soundOn, mcpEnabled, mcpPort, mcpAllowLan
         case notifyEnabled, notifyAutoExpand
     }
 
@@ -52,6 +54,7 @@ struct AppSettings: Codable, Equatable {
         soundOn = try c.decodeIfPresent(Bool.self, forKey: .soundOn) ?? true
         mcpEnabled = try c.decodeIfPresent(Bool.self, forKey: .mcpEnabled) ?? true
         mcpPort = try c.decodeIfPresent(Int.self, forKey: .mcpPort) ?? 9527
+        mcpAllowLan = try c.decodeIfPresent(Bool.self, forKey: .mcpAllowLan) ?? false
         notifyEnabled = try c.decodeIfPresent(Bool.self, forKey: .notifyEnabled) ?? true
         notifyAutoExpand = try c.decodeIfPresent(Bool.self, forKey: .notifyAutoExpand) ?? true
     }

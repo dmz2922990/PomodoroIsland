@@ -1,15 +1,18 @@
 import Foundation
 import Network
 
-/// 内嵌 MCP 服务（Streamable HTTP + JSON-RPC 2.0，仅监听 127.0.0.1）。
+/// 内嵌 MCP 服务（Streamable HTTP + JSON-RPC 2.0）。
 /// 供 AI 客户端（ZCode / Claude 等）对任务增删改查并读取专注状态。
 /// 接入方式：MCP 客户端配置 URL  http://127.0.0.1:<port>/mcp
+/// 默认仅监听本机回环；allowLan=true 时监听所有网卡（无鉴权，仅限可信网络）。
 final class MCPServer {
 
     private let store: TaskStore
     private let engine: PomodoroEngine
     private let notifications: NotificationStore
     let port: UInt16
+    /// 是否允许局域网访问（false = 仅绑定 127.0.0.1）
+    let allowLan: Bool
 
     private var listener: NWListener?
     /// 并发队列：ask_user 会阻塞线程等待用户响应，串行会卡住其他 MCP 请求
@@ -22,11 +25,12 @@ final class MCPServer {
 
     private let iso = ISO8601DateFormatter()
 
-    init(store: TaskStore, engine: PomodoroEngine, notifications: NotificationStore, port: UInt16) {
+    init(store: TaskStore, engine: PomodoroEngine, notifications: NotificationStore, port: UInt16, allowLan: Bool = false) {
         self.store = store
         self.engine = engine
         self.notifications = notifications
         self.port = port
+        self.allowLan = allowLan
     }
 
     // MARK: - 生命周期
@@ -37,9 +41,15 @@ final class MCPServer {
             onStateChange?(false, "端口 \(port) 无效")
             return
         }
+        let params = NWParameters.tcp
         let l: NWListener
         do {
-            l = try NWListener(using: NWParameters.tcp, on: nwPort)
+            if allowLan {
+                l = try NWListener(using: params, on: nwPort)  // 所有网卡（0.0.0.0）
+            } else {
+                params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: nwPort)
+                l = try NWListener(using: params)              // 仅本机回环
+            }
         } catch {
             isRunning = false
             onStateChange?(false, "启动失败：端口 \(port) 不可用（\(error.localizedDescription)）")
@@ -69,6 +79,32 @@ final class MCPServer {
         listener?.cancel()
         listener = nil
         isRunning = false
+    }
+
+    /// 第一个 en 系网卡的 IPv4 地址（设置页展示局域网访问地址用）
+    static func lanIPv4Address() -> String? {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddr) }
+        var fallback: String?
+        var ptr = ifaddr
+        while let p = ptr {
+            let ifa = p.pointee
+            if let sa = ifa.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET) {
+                let name = String(cString: ifa.ifa_name)
+                if name == "en0" || name.hasPrefix("en") {
+                    var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    if getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count),
+                                   nil, 0, NI_NUMERICHOST) == 0 {
+                        let ip = String(cString: host)
+                        if name == "en0" { return ip }
+                        fallback = fallback ?? ip
+                    }
+                }
+            }
+            ptr = p.pointee.ifa_next
+        }
+        return fallback
     }
 
     // MARK: - HTTP（最小实现，逐连接处理，响应后关闭）

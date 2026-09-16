@@ -376,6 +376,14 @@ private struct SettingsPage: View {
     @EnvironmentObject private var store: TaskStore
     @State private var settingsTab: SettingsTab = .timer
 
+    /// 展示/复制的接入地址：允许局域网时用真实网卡 IP，否则回环
+    private var mcpURLText: String {
+        if store.settings.mcpAllowLan, let ip = MCPServer.lanIPv4Address() {
+            return "http://\(ip):\(store.settings.mcpPort)/mcp"
+        }
+        return "http://127.0.0.1:\(store.settings.mcpPort)/mcp"
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
@@ -497,7 +505,7 @@ private struct SettingsPage: View {
                 .foregroundStyle(Theme.textTertiary)
 
             HStack(spacing: 6) {
-                Text("http://127.0.0.1:\(String(store.settings.mcpPort))/mcp")
+                Text(mcpURLText)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
@@ -505,7 +513,7 @@ private struct SettingsPage: View {
 
                 Button {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString("http://127.0.0.1:\(store.settings.mcpPort)/mcp", forType: .string)
+                    NSPasteboard.general.setString(mcpURLText, forType: .string)
                 } label: {
                     Text("复制")
                         .font(.system(size: 10, weight: .semibold))
@@ -522,6 +530,20 @@ private struct SettingsPage: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.white.opacity(0.06))
             )
+
+            // 局域网访问开关（默认仅本机回环）
+            SettingToggleRow(
+                title: "允许局域网访问（0.0.0.0）",
+                isOn: store.settings.mcpAllowLan
+            ) { on in update { $0.mcpAllowLan = on } }
+
+            if store.settings.mcpAllowLan {
+                let ip = MCPServer.lanIPv4Address() ?? "<本机局域网IP>"
+                Text("⚠️ 服务无鉴权，局域网内设备可直接操作。远端 AI 配置 http://\(ip):\(store.settings.mcpPort)/mcp，仅在可信网络开启")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color(red: 0.95, green: 0.62, blue: 0.25))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
