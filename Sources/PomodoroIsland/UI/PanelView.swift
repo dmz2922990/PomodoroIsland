@@ -646,6 +646,8 @@ struct TaskRow: View {
     @FocusState private var renameFieldFocused: Bool
     @State private var confirmingDelete = false
     @State private var deleteConfirmWork: DispatchWorkItem?
+    @State private var confirmingComplete = false
+    @State private var completeConfirmWork: DispatchWorkItem?
     let isCurrent: Bool
     let isHovered: Bool
     let onHover: (Bool) -> Void
@@ -655,16 +657,29 @@ struct TaskRow: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            Button(action: onToggle) {
-                Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 13))
+            Button {
+                if !task.isDone, !confirmingComplete {
+                    // 标记完成：两步确认（3 秒内再点生效）
+                    confirmingComplete = true
+                    let work = DispatchWorkItem { confirmingComplete = false }
+                    completeConfirmWork = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
+                } else {
+                    confirmingComplete = false
+                    completeConfirmWork?.cancel()
+                    onToggle()
+                }
+            } label: {
+                Image(systemName: confirmingComplete ? "checkmark.circle.fill" : (task.isDone ? "checkmark.circle.fill" : "circle"))
+                    .font(.system(size: confirmingComplete ? 15 : 13))
                     .foregroundStyle(
-                        task.isDone
+                        confirmingComplete
                             ? Color(red: 0.35, green: 0.78, blue: 0.44)
-                            : Theme.textTertiary
+                            : (task.isDone ? Color(red: 0.35, green: 0.78, blue: 0.44) : Theme.textTertiary)
                     )
             }
             .buttonStyle(.plain)
+            .animation(.easeInOut(duration: 0.15), value: confirmingComplete)
 
             VStack(alignment: .leading, spacing: 1) {
                 if isEditing {
