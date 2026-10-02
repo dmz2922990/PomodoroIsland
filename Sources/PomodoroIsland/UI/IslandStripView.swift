@@ -11,6 +11,10 @@ struct IslandStripView: View {
     @EnvironmentObject private var controller: NotchWindowController
     @EnvironmentObject private var notifications: NotificationStore
 
+    /// 未开始计时时，岛心内容每 10 分钟在未完成任务间轮换（仅切换显示，不改变"当前"）
+    @State private var rotationIndex = 0
+    private let rotationTimer = Timer.publish(every: 600, on: .main, in: .common).autoconnect()
+
     private var screen: NSScreen { NotchScreenInfo.preferredScreen() }
 
     /// 菜单栏/刘海高度带
@@ -49,6 +53,19 @@ struct IslandStripView: View {
         .contentShape(shape)
         .animation(.easeInOut(duration: 0.15), value: engine.running)
         .animation(.easeInOut(duration: 0.18), value: controller.isPeeking)
+        .onReceive(rotationTimer) { _ in
+            guard !engine.running, openTasks.count > 1 else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { rotationIndex += 1 }
+        }
+    }
+
+    private var openTasks: [TaskItem] { store.tasks.filter { !$0.isDone } }
+
+    /// 岛心标题：计时中 = 当前任务；未开始 = 轮换位上的未完成任务
+    private var centerTitle: String? {
+        if engine.running { return store.currentTask?.title }
+        guard !openTasks.isEmpty else { return nil }
+        return openTasks[rotationIndex % openTasks.count].title
     }
 
     // MARK: - 垂降行（当前任务 + 剩余时间）
@@ -93,10 +110,10 @@ struct IslandStripView: View {
             .frame(width: NotchScreenInfo.collapsedWing - 4, alignment: .center)
             .frame(maxHeight: .infinity)
 
-            // 中央：当前任务（刘海遮挡为预期设计）
+            // 中央：计时中固定当前任务；未开始时每 10 分钟轮换未完成任务
             Group {
-                if let task = store.currentTask {
-                    Text(task.title)
+                if let title = centerTitle {
+                    Text(title)
                         .foregroundStyle(
                             engine.running
                                 ? Color.white.opacity(0.92)   // 计时中：亮白
@@ -112,7 +129,7 @@ struct IslandStripView: View {
             .truncationMode(.middle)
             .padding(.horizontal, 3)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.easeInOut(duration: 0.2), value: store.currentTask?.title)
+            .animation(.easeInOut(duration: 0.25), value: centerTitle)
 
             // 右翼：计时环
             RoundTimerBadge(
