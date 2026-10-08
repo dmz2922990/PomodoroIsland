@@ -17,8 +17,8 @@
 ## 构建与运行
 
 ```bash
-./scripts/make-app.sh
-open build/PomodoroIsland.app
+./scripts/make-app.sh    # 构建并组装 .app
+./scripts/run.sh         # 启动（已在运行则跳过；无构建产物时自动先构建）
 ```
 
 调试运行（不打包）：
